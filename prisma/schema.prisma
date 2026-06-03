@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Session {
+  id               String   @id
+  techStack        String
+  provider         String   @default("groq")
+  model            String
+  questions        Json
+  answers          Json
+  evaluations      Json
+  status           String   // 'active' | 'completed' | 'extended'
+  finalEvaluation  Json?
+  jobDescription   String?  @db.Text
+  questionHistory  Json?
+  extensionCount   Int      @default(0)
+  totalQuestions   Int      @default(0)
+  answeredCount    Int      @default(0)
+  interviewContext Json?
+  userApiKeyUsed   Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model UserApiKey {
+  id            String    @id @default(uuid())
+  provider      String    // 'gemini', 'groq', 'nvidia'
+  encryptedKey  String
+  isValid       Boolean   @default(true)
+  lastValidated DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([provider])
+}
+
