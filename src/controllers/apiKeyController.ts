@@ -18,8 +18,8 @@ class ApiKeyController {
 
       await apiKeyService.saveKey(provider, apiKey);
       res.json({ success: true, message: 'API key saved successfully' });
-    } catch (error: any) {
-      if (error.message.includes('Invalid API key') || error.message.includes('Only gemini provider')) {
+    } catch (error: unknown) {
+      if (error instanceof Error && (error.message.includes('Invalid API key') || error.message.includes('Only gemini provider'))) {
         res.status(400).json({ success: false, error: error.message });
         return;
       }
@@ -49,8 +49,8 @@ class ApiKeyController {
 
       const isValid = await apiKeyService.validateKey(provider, apiKey);
       res.json({ success: true, data: { isValid } });
-    } catch (error: any) {
-      if (error.message.includes('Only gemini provider')) {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message.includes('Only gemini provider')) {
         res.status(400).json({ success: false, error: error.message });
         return;
       }

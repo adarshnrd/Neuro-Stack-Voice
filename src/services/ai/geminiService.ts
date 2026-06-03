@@ -85,10 +85,10 @@ class GeminiService extends BaseAIService {
       throw new AppError(`Gemini API error (${response.status}): ${errText}`, 502);
     }
 
-    const data: any = await response.json();
+    const data: unknown = await response.json();
 
     // Guard against unexpected response shapes
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = (data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (typeof text !== 'string') {
       console.error('[Gemini] Unexpected response format:', JSON.stringify(data).substring(0, 500));
       throw new AppError('Gemini returned an unexpected response format', 502);

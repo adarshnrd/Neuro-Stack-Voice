@@ -10,7 +10,7 @@ const config: AppConfig = {
     nvidiaKey: process.env.NVIDIA_API_KEY,
     groqKey: process.env.GROQ_API_KEY,
     geminiKey: process.env.GEMINI_API_KEY,
-  } as any,
+  },
   app: {
     questionsPerInterview: parseInt(process.env.QUESTIONS_PER_INTERVIEW || '10', 10),
     jdQuestionsPerInterview: parseInt(process.env.JD_QUESTIONS_PER_INTERVIEW || '15', 10),
@@ -18,7 +18,7 @@ const config: AppConfig = {
   },
   encryption: {
     secret: process.env.ENCRYPTION_SECRET || '',
-  } as any,
+  },
   cors: {
     // Comma-separated list of allowed origins; defaults to wildcard in development
     allowedOrigins: process.env.ALLOWED_ORIGINS
@@ -35,13 +35,13 @@ const config: AppConfig = {
 export function validateConfig(): void {
   const errors: string[] = [];
 
-  if (!(config as any).encryption.secret) {
+  if (!config.encryption.secret) {
     errors.push('ENCRYPTION_SECRET is required');
   }
 
   // At least one AI provider key must be present
   const hasAnyAiKey =
-    (config as any).ai.groqKey || (config as any).ai.nvidiaKey || (config as any).ai.geminiKey;
+    config.ai.groqKey || config.ai.nvidiaKey || config.ai.geminiKey;
   if (!hasAnyAiKey) {
     errors.push(
       'At least one AI API key is required: GROQ_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY'

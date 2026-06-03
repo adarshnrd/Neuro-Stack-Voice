@@ -191,9 +191,9 @@ class InterviewService {
       // Override the subjective AI overall score with a strict mathematical average 
       // of the individual question scores to ensure consistency.
       if (session.evaluations && session.evaluations.length > 0) {
-        const validEvals = session.evaluations.filter((e: any) => typeof e.score === 'number');
+        const validEvals = session.evaluations.filter((e) => typeof e.score === 'number');
         if (validEvals.length > 0) {
-          const totalScore = validEvals.reduce((sum: number, e: any) => sum + e.score, 0);
+          const totalScore = validEvals.reduce((sum: number, e) => sum + e.score, 0);
           finalEval.overallScore = Math.round((totalScore / (validEvals.length * 10)) * 100);
         } else {
           finalEval.overallScore = 0;
@@ -271,7 +271,7 @@ class InterviewService {
 
   async getHistory(limit: number = 20, offset: number = 0) {
     const sessions = await interviewRepository.listCompletedSessions(limit, offset);
-    return sessions.map((s: any) => ({
+    return sessions.map((s) => ({
       id: s.id,
       techStack: s.techStack,
       model: s.model,

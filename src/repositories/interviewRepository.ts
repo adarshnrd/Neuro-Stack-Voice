@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/databaseConfig';
 import {
   SessionData,
@@ -42,16 +43,16 @@ class InterviewRepository {
           techStack: sessionData.techStack,
           provider: sessionData.provider || 'groq',
           model: sessionData.model,
-          questions: sessionData.questions as unknown as any,
-          answers: (sessionData.answers || []) as unknown as any,
-          evaluations: (sessionData.evaluations || []) as unknown as any,
+          questions: sessionData.questions as unknown as Prisma.InputJsonValue,
+          answers: (sessionData.answers || []) as unknown as Prisma.InputJsonValue,
+          evaluations: (sessionData.evaluations || []) as unknown as Prisma.InputJsonValue,
           status: sessionData.status,
-          finalEvaluation: sessionData.finalEvaluation as unknown as any ?? undefined,
+          finalEvaluation: (sessionData.finalEvaluation as unknown as Prisma.InputJsonValue) ?? undefined,
           jobDescription: sessionData.jobDescription || null,
-          questionHistory: sessionData.questionHistory as unknown as any ?? undefined,
+          questionHistory: (sessionData.questionHistory as unknown as Prisma.InputJsonValue) ?? undefined,
           extensionCount: sessionData.extensionCount || 0,
           totalQuestions: sessionData.totalQuestions || 0,
-          interviewContext: sessionData.interviewContext as unknown as any ?? undefined,
+          interviewContext: (sessionData.interviewContext as unknown as Prisma.InputJsonValue) ?? undefined,
           userApiKeyUsed: sessionData.userApiKeyUsed || false,
         },
       });
@@ -134,7 +135,7 @@ class InterviewRepository {
           totalQuestions: true,
           finalEvaluation: true,
           createdAt: true,
-        } as any,
+        },
       });
       return sessions as unknown as Partial<SessionData>[];
     } catch (error) {

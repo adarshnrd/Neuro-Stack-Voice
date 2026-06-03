@@ -55,10 +55,10 @@ class NvidiaService extends BaseAIService {
       throw new AppError(`NVIDIA API error (${response.status}): ${errText}`, 502);
     }
 
-    const data: any = await response.json();
+    const data: unknown = await response.json();
 
     // Guard against unexpected response shapes
-    const text = data?.choices?.[0]?.message?.content;
+    const text = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content;
     if (typeof text !== 'string') {
       console.error('[NVIDIA] Unexpected response shape:', JSON.stringify(data).substring(0, 500));
       throw new AppError('NVIDIA returned an unexpected response format', 502);
