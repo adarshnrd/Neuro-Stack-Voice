@@ -80,7 +80,7 @@ class GeminiService extends BaseAIService {
         throw new AppError(`Gemini API rate limit exceeded. Please try again later.`, 429);
       }
       if (response.status === 400 || response.status === 403) {
-        throw new AppError(`Gemini API authentication error (${response.status}). Check GEMINI_API_KEY.`, 503);
+        throw new AppError(`Gemini API authentication error (${response.status}). Check GEMINI_API_KEY.`, 401);
       }
       throw new AppError(`Gemini API error (${response.status}): ${errText}`, 502);
     }
