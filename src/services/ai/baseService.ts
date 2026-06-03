@@ -8,8 +8,8 @@ import {
 
 // ─── Request helpers ────────────────────────────────────────────────────────
 
-/** Default timeout for AI API calls — 60s is generous but prevents hangs. */
-const DEFAULT_TIMEOUT_MS = 60_000;
+/** Default timeout for AI API calls — 2m (120s) prevents hangs while allowing large reasoning models. */
+const DEFAULT_TIMEOUT_MS = 120_000;
 
 /** Max retries for transient failures (5xx, network errors). */
 const MAX_RETRIES = 2;
