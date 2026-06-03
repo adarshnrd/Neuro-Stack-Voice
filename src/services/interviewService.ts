@@ -187,6 +187,20 @@ class InterviewService {
           );
         }
       }
+
+      // Override the subjective AI overall score with a strict mathematical average 
+      // of the individual question scores to ensure consistency.
+      if (session.evaluations && session.evaluations.length > 0) {
+        const validEvals = session.evaluations.filter((e: any) => typeof e.score === 'number');
+        if (validEvals.length > 0) {
+          const totalScore = validEvals.reduce((sum: number, e: any) => sum + e.score, 0);
+          finalEval.overallScore = Math.round((totalScore / (validEvals.length * 10)) * 100);
+        } else {
+          finalEval.overallScore = 0;
+        }
+      } else {
+        finalEval.overallScore = 0;
+      }
     }
 
     await interviewRepository.updateSession(sessionId, {

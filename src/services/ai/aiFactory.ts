@@ -11,8 +11,10 @@ class AIFactory {
    */
   resolveModelInfo(modelId: string): ResolvedModel {
     if (modelId.startsWith('gemini')) return { provider: 'google', model: modelId };
-    if (modelId.startsWith('llama') || modelId === 'groq') return { provider: 'groq', model: modelId };
-    if (modelId.startsWith('nvidia')) return { provider: 'nvidia', model: modelId };
+    if (modelId === 'groq') return { provider: 'groq', model: 'llama-3.3-70b-versatile' };
+    if (modelId.startsWith('llama')) return { provider: 'groq', model: modelId };
+    if (modelId === 'nvidia') return { provider: 'nvidia', model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning' };
+    if (modelId.startsWith('nvidia/')) return { provider: 'nvidia', model: modelId };
 
     // Default fallback (failsafe)
     return { provider: 'groq', model: 'llama-3.3-70b-versatile' };
