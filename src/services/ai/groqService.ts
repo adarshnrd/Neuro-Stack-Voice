@@ -6,12 +6,12 @@ import {
   validateEvaluation,
   validateFinalEvaluation,
 } from './baseService';
-import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../interfaces';
+import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../types';
 import config from '../../config/config';
 import { getQuestionsPrompt, getEvaluationPrompt, getFinalEvaluationPrompt } from '../../utils/promptBuilder';
 import { AppError } from '../../utils/appError';
 
-class GroqService extends BaseAIService {
+export class GroqService extends BaseAIService {
   private readonly apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
 
   getDefaultModel(): string {
@@ -26,7 +26,7 @@ class GroqService extends BaseAIService {
     const response = await fetch(this.apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${config.ai.groqKey}`,
+        Authorization: `Bearer ${config.ai.groqKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -53,8 +53,8 @@ class GroqService extends BaseAIService {
 
     const data: unknown = await response.json();
 
-    // Guard against unexpected response shapes
-    const text = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content;
+    const text = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message
+      ?.content;
     if (typeof text !== 'string') {
       console.error('[Groq] Unexpected response shape:', JSON.stringify(data).substring(0, 500));
       throw new AppError('Groq returned an unexpected response format', 502);
@@ -91,4 +91,4 @@ class GroqService extends BaseAIService {
   }
 }
 
-export default new GroqService();
+export default GroqService;

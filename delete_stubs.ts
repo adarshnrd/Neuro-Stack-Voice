@@ -1,31 +1,8 @@
-import fs from 'fs';
-import path from 'path';
-
-const files = [
-  'server.js',
-  'src/config/index.js',
-  'src/api/repositories/interview.repository.js',
-  'src/middleware/errorHandler.js'
-];
-
-files.forEach(file => {
-  const filePath = path.resolve(file);
-  try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      console.log(`Successfully deleted: ${file}`);
-    } else {
-      console.log(`File not found, skipping: ${file}`);
-    }
-  } catch (error) {
-    console.error(`Error deleting ${file}:`, error);
-  }
-});
-
-// Self-destruct
-try {
-  fs.unlinkSync(__filename);
-  console.log('Temporary deletion script cleaned up successfully.');
-} catch (error) {
-  console.error('Error cleaning up deletion script:', error);
-}
+// DEPRECATED — this file previously deleted other files on disk (including
+// itself) when executed. It has been neutralized as part of the Phase 3
+// security cleanup: a self-deleting, unreferenced script with no npm-script
+// entry point and no confirmation prompt is a landmine for whoever finds it
+// later and runs it out of curiosity. It is safe to delete this file
+// entirely:
+//
+//   git rm delete_stubs.ts

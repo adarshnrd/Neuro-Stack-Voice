@@ -1,9 +1,8 @@
 import { BaseAIService } from './baseService';
-import geminiService from './geminiService';
-import groqService from './groqService';
-import nvidiaService from './nvidiaService';
-import { AppError } from '../../utils/appError';
-import { ResolvedModel } from '../../interfaces';
+import { GeminiService } from './geminiService';
+import { GroqService } from './groqService';
+import { NvidiaService } from './nvidiaService';
+import { ResolvedModel } from '../../types';
 
 class AIFactory {
   /**
@@ -21,48 +20,37 @@ class AIFactory {
   }
 
   /**
-   * Returns the appropriate AI service implementation based on the model ID.
-   * Sets the model on the service before returning.
+   * Returns a NEW AI service instance bound to the resolved model (and, for
+   * Gemini, the caller-supplied API key if any). A fresh instance per call
+   * means concurrent requests can never see each other's model or key —
+   * see the class doc on BaseAIService for the bug this replaces.
    */
   getService(modelId: string, userApiKey?: string): BaseAIService {
     const info = this.resolveModelInfo(modelId);
-    let service: BaseAIService;
 
     switch (info.provider) {
       case 'google':
-        service = geminiService;
-        break;
+        return new GeminiService(info.model, userApiKey);
       case 'nvidia':
-        service = nvidiaService;
-        break;
+        return new NvidiaService(info.model);
       case 'groq':
       default:
-        service = groqService;
-        break;
+        return new GroqService(info.model);
     }
-
-    service.setModel(info.model);
-    return service;
   }
 
   /**
-   * Provides an alternative service when the primary fails.
+   * Provides an alternative service instance when the primary fails.
    */
-  getFallbackService(failedModelId: string): BaseAIService {
+  getFallbackService(failedModelId: string, userApiKey?: string): BaseAIService {
     const info = this.resolveModelInfo(failedModelId);
 
-    // Hardcoded fallback chain to maximize reliability
     if (info.provider === 'google') {
       // If Gemini fails, try Groq Llama
-      const svc = groqService;
-      svc.setModel('llama-3.3-70b-versatile');
-      return svc;
-    } else {
-      // If Groq/Nvidia fails, try Gemini Flash
-      const svc = geminiService;
-      svc.setModel('gemini-3.5-flash');
-      return svc;
+      return new GroqService('llama-3.3-70b-versatile');
     }
+    // If Groq/Nvidia fails, try Gemini Flash
+    return new GeminiService('gemini-3.5-flash', userApiKey);
   }
 }
 

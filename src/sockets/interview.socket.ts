@@ -1,6 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import interviewService from '../services/interviewService';
-import { AppError } from '../utils/appError';
+import interviewService from '../services/interview.service';
 
 /** Basic UUID v4 shape check to reject obviously malformed session IDs. */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -17,10 +16,21 @@ function emitError(socket: Socket, code: string, message: string): void {
   socket.emit('error', { code, message });
 }
 
+/**
+ * All handlers below rely on `socket.data.userId`, populated by
+ * socketAuthMiddleware (io.use()) before any event handler runs — an
+ * unauthenticated socket never reaches this code. Session ownership itself
+ * is enforced downstream inside interviewService (getOwnedSession), which
+ * is the same check the HTTP routes use, so joining a room you don't own
+ * fails the same way extending or ending it would.
+ */
 export default function socketHandler(io: Server, socket: Socket) {
+  const userId: string = socket.data.userId;
 
   /**
    * interview:join — client joins the room for a session to receive events.
+   * Verifies ownership before joining so a client can't listen in on
+   * another user's interview by guessing/reusing a session ID.
    */
   socket.on('interview:join', async (data: { sessionId: string }) => {
     try {
@@ -28,6 +38,7 @@ export default function socketHandler(io: Server, socket: Socket) {
         emitError(socket, 'INVALID_SESSION_ID', 'A valid session ID is required to join');
         return;
       }
+      await interviewService.getSessionDetail(data.sessionId, userId);
       socket.join(data.sessionId);
       console.log(`[Socket] Client joined session: ${data.sessionId}`);
     } catch (error) {
@@ -43,7 +54,6 @@ export default function socketHandler(io: Server, socket: Socket) {
     'answer:final',
     async (data: { sessionId: string; questionId: number; text: string }) => {
       try {
-        // ── Input validation ──
         if (!isValidSessionId(data?.sessionId)) {
           emitError(socket, 'INVALID_SESSION_ID', 'A valid session ID is required');
           return;
@@ -57,7 +67,6 @@ export default function socketHandler(io: Server, socket: Socket) {
           return;
         }
 
-        // Trim and enforce length limit
         const answerText = data.text.trim();
         if (!answerText) {
           emitError(socket, 'INVALID_INPUT', 'Answer text cannot be empty');
@@ -73,11 +82,7 @@ export default function socketHandler(io: Server, socket: Socket) {
         }
 
         console.log(`[Socket] Received final answer for Q${data.questionId} in session ${data.sessionId}`);
-        const result = await interviewService.processAnswer(
-          data.sessionId,
-          data.questionId,
-          answerText
-        );
+        const result = await interviewService.processAnswer(data.sessionId, userId, data.questionId, answerText);
 
         socket.emit('answer:evaluated', {
           questionId: data.questionId,
@@ -103,7 +108,7 @@ export default function socketHandler(io: Server, socket: Socket) {
       }
 
       console.log(`[Socket] Ending session: ${data.sessionId}`);
-      const finalResult = await interviewService.endSession(data.sessionId);
+      const finalResult = await interviewService.endSession(data.sessionId, userId);
 
       socket.emit('interview:complete', {
         summary: finalResult?.finalEvaluation ?? {

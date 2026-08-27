@@ -8,8 +8,20 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sessions Session[]
+  apiKeys  UserApiKey[]
+}
+
 model Session {
   id               String   @id
+  userId           String?
   techStack        String
   provider         String   @default("groq")
   model            String
@@ -28,12 +40,16 @@ model Session {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt @default(now())
 
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
   @@index([status])
   @@index([createdAt])
+  @@index([userId])
 }
 
 model UserApiKey {
   id            String    @id @default(uuid())
+  userId        String
   provider      String    // 'gemini', 'groq', 'nvidia'
   encryptedKey  String
   isValid       Boolean   @default(true)
@@ -41,6 +57,7 @@ model UserApiKey {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  @@unique([provider])
-}
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, provider])
+}

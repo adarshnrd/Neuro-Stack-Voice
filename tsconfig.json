@@ -12,10 +12,27 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": false,
     "sourceMap": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "public"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "public",
+    "tests",
+    "src/api",
+    "src/controllers",
+    "src/interfaces",
+    "src/middleware",
+    "src/routes",
+    "src/config/index.ts",
+    "src/config/databaseConfig.ts",
+    "src/repositories/interviewRepository.ts",
+    "src/services/interviewService.ts",
+    "src/services/apiKeyService.ts"
+  ],
   "ts-node": {
     "transpileOnly": true,
     "files": true,

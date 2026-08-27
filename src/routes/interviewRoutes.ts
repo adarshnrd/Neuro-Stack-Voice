@@ -1,33 +1,10 @@
-import { Router } from 'express';
-import interviewController from '../controllers/interviewController';
-import { validateBody, validateUuidParam } from '../middleware/requestValidator';
-
-const router = Router();
-
-router.post(
-  '/start',
-  validateBody({
-    techStack:  { required: true, type: 'string', maxLength: 200 },
-    model:      { required: true, type: 'string', maxLength: 100 },
-  }),
-  interviewController.start
-);
-
-router.post(
-  '/:sessionId/extend',
-  validateUuidParam('sessionId'),
-  interviewController.extend
-);
-
-router.get('/tech-stacks', interviewController.getTechStacks);
-router.get('/models', interviewController.getModels);
-router.get('/config', interviewController.getConfig);
-router.get('/history', interviewController.getHistory);
-
-router.get(
-  '/:sessionId',
-  validateUuidParam('sessionId'),
-  interviewController.getSessionDetail
-);
-
-export default router;
+// DEPRECATED — superseded by src/http/routes/interview.routes.ts as part of the Phase 2 restructure.
+//
+// This file is intentionally emptied (not deleted) because the automated
+// tooling used to carry out this restructure could only edit file content
+// on disk, not delete/rename files. It is excluded from the TypeScript
+// build via tsconfig.json ("exclude"), so it has no effect on compilation
+// or runtime. It is safe — and recommended — to delete this file and its
+// now-empty parent directory once you've verified the new structure works:
+//
+//   git rm "src/routes/interviewRoutes.ts"

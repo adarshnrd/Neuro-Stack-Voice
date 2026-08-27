@@ -16,7 +16,7 @@ export class UIManager {
 
   // ---- Panels ----
   showPanel(panelId) {
-    const panels = ['setup-panel', 'interview-panel', 'loading-panel', 'completion-panel', 'history-panel', 'history-detail-panel'];
+    const panels = ['auth-panel', 'setup-panel', 'interview-panel', 'loading-panel', 'completion-panel', 'history-panel', 'history-detail-panel'];
     panels.forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;

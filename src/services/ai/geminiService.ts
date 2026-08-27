@@ -6,39 +6,21 @@ import {
   validateEvaluation,
   validateFinalEvaluation,
 } from './baseService';
-import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../interfaces';
+import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../types';
 import config from '../../config/config';
 import { getQuestionsPrompt, getEvaluationPrompt, getFinalEvaluationPrompt } from '../../utils/promptBuilder';
 import { AppError } from '../../utils/appError';
 
-class GeminiService extends BaseAIService {
+export class GeminiService extends BaseAIService {
   private readonly baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
-
-  /**
-   * Per-call API key override. Stored here as a convenience for the current
-   * request flow, but makeRequest() also accepts it as a parameter to avoid
-   * the race condition where concurrent requests could overwrite each other's key.
-   *
-   * IMPORTANT: Always prefer passing the key explicitly to makeRequest().
-   */
-  private runtimeApiKey: string | null = null;
 
   getDefaultModel(): string {
     return 'gemini-3.5-flash';
   }
 
-  setRuntimeApiKey(key: string): void {
-    this.runtimeApiKey = key;
-  }
-
-  clearRuntimeApiKey(): void {
-    this.runtimeApiKey = null;
-  }
-
-  private resolveApiKey(explicitKey?: string): string {
-    // Precedence: explicit parameter → runtime override → system config
-    if (explicitKey) return explicitKey;
-    if (this.runtimeApiKey) return this.runtimeApiKey;
+  /** Precedence: constructor-supplied key (caller's own key) → system config. */
+  private resolveApiKey(): string {
+    if (this.apiKey) return this.apiKey;
     if (config.ai.geminiKey) return config.ai.geminiKey;
     throw new AppError(
       'GEMINI_API_KEY is not configured. Please set it in .env or provide your own API key.',
@@ -46,10 +28,9 @@ class GeminiService extends BaseAIService {
     );
   }
 
-  private async makeRequest(content: string, apiKey?: string): Promise<string> {
-    const key = this.resolveApiKey(apiKey);
-    const model = this.getActiveModel();
-    const url = `${this.baseUrl}/${model}:generateContent`;
+  private async makeRequest(content: string): Promise<string> {
+    const key = this.resolveApiKey();
+    const url = `${this.baseUrl}/${this.getActiveModel()}:generateContent`;
 
     const response = await fetch(url, {
       method: 'POST',
@@ -58,12 +39,7 @@ class GeminiService extends BaseAIService {
         'x-goog-api-key': key,
       },
       body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: content }],
-          },
-        ],
+        contents: [{ role: 'user', parts: [{ text: content }] }],
         generationConfig: {
           temperature: 0.7,
           topP: 0.9,
@@ -87,8 +63,8 @@ class GeminiService extends BaseAIService {
 
     const data: unknown = await response.json();
 
-    // Guard against unexpected response shapes
-    const text = (data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })?.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = (data as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> })
+      ?.candidates?.[0]?.content?.parts?.[0]?.text;
     if (typeof text !== 'string') {
       console.error('[Gemini] Unexpected response format:', JSON.stringify(data).substring(0, 500));
       throw new AppError('Gemini returned an unexpected response format', 502);
@@ -126,10 +102,13 @@ class GeminiService extends BaseAIService {
 
   /**
    * Validates an API key by making a lightweight test request.
+   * Static because key validation happens before we know we want a full
+   * service instance bound to that key.
    */
-  async validateApiKey(apiKey: string): Promise<boolean> {
+  static async validateApiKey(apiKey: string): Promise<boolean> {
     try {
-      await this.makeRequest('Respond with: {"status":"ok"}', apiKey);
+      const probe = new GeminiService('gemini-3.5-flash', apiKey);
+      await probe.makeRequest('Respond with: {"status":"ok"}');
       return true;
     } catch (error) {
       console.warn('[Gemini] API key validation failed:', error);
@@ -138,4 +117,4 @@ class GeminiService extends BaseAIService {
   }
 }
 
-export default new GeminiService();
+export default GeminiService;

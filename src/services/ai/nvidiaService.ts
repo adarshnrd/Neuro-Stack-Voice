@@ -6,12 +6,12 @@ import {
   validateEvaluation,
   validateFinalEvaluation,
 } from './baseService';
-import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../interfaces';
+import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../types';
 import config from '../../config/config';
 import { getQuestionsPrompt, getEvaluationPrompt, getFinalEvaluationPrompt } from '../../utils/promptBuilder';
 import { AppError } from '../../utils/appError';
 
-class NvidiaService extends BaseAIService {
+export class NvidiaService extends BaseAIService {
   private readonly apiUrl = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
   getDefaultModel(): string {
@@ -26,7 +26,7 @@ class NvidiaService extends BaseAIService {
     const response = await fetch(this.apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${config.ai.nvidiaKey}`,
+        Authorization: `Bearer ${config.ai.nvidiaKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -34,11 +34,9 @@ class NvidiaService extends BaseAIService {
         messages: [{ role: 'user', content }],
         temperature: 0.6,
         top_p: 0.95,
-        max_tokens: 8192,        // Capped from 65536 to prevent cost blowout
-        reasoning_budget: 8192,  // Capped from 16384
-        chat_template_kwargs: {
-          enable_thinking: true,
-        },
+        max_tokens: 8192, // Capped from 65536 to prevent cost blowout
+        reasoning_budget: 8192, // Capped from 16384
+        chat_template_kwargs: { enable_thinking: true },
         stream: false,
       }),
       signal: createTimeoutSignal(),
@@ -57,8 +55,8 @@ class NvidiaService extends BaseAIService {
 
     const data: unknown = await response.json();
 
-    // Guard against unexpected response shapes
-    const text = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message?.content;
+    const text = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message
+      ?.content;
     if (typeof text !== 'string') {
       console.error('[NVIDIA] Unexpected response shape:', JSON.stringify(data).substring(0, 500));
       throw new AppError('NVIDIA returned an unexpected response format', 502);
@@ -95,4 +93,4 @@ class NvidiaService extends BaseAIService {
   }
 }
 
-export default new NvidiaService();
+export default NvidiaService;

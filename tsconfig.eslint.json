@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "public",
+    "src/api",
+    "src/controllers",
+    "src/interfaces",
+    "src/middleware",
+    "src/routes",
+    "src/config/index.ts",
+    "src/config/databaseConfig.ts",
+    "src/repositories/interviewRepository.ts",
+    "src/services/interviewService.ts"
+  ]
+}

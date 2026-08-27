@@ -1,4 +1,4 @@
-import { GenerationOptions } from '../interfaces';
+import { GenerationOptions } from '../types';
 
 // ============================================================
 // GLOBAL SYSTEM PROMPT

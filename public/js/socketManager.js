@@ -1,6 +1,11 @@
 export class SocketManager {
   constructor() {
+    // autoConnect: false — the server now requires a valid session cookie
+    // at handshake time (see src/sockets/auth.ts), so connecting before the
+    // user is authenticated would just fail and retry pointlessly. Call
+    // connect() once login/session-check succeeds instead.
     this.socket = window.io({
+      autoConnect: false,
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
@@ -11,6 +16,18 @@ export class SocketManager {
     this._pendingSessionId = null;
 
     this.setupSocket();
+  }
+
+  /** Opens the connection. Safe to call once the auth cookie is set. */
+  connect() {
+    if (!this.socket.connected) this.socket.connect();
+  }
+
+  /** Closes the connection (e.g. on logout) so a stale session isn't reused. */
+  disconnect() {
+    this.socket.disconnect();
+    this.connected = false;
+    this._pendingSessionId = null;
   }
 
   setupSocket() {

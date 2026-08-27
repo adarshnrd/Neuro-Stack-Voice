@@ -1,43 +1,10 @@
-import { PrismaClient } from '@prisma/client';
-import config from './config';
-
-/**
- * Shared PrismaClient singleton.
- *
- * Using a single instance avoids creating duplicate connection pools
- * (the previous codebase had one in server.ts and another in the repository).
- *
- * In development, the instance is cached on `globalThis` so that
- * hot-reloads (nodemon / ts-node) don't exhaust the connection pool.
- */
-
-const globalForPrisma = globalThis as unknown as { __prisma?: PrismaClient };
-
-function createPrismaClient(): PrismaClient {
-  return new PrismaClient({
-    log:
-      config.env === 'development'
-        ? ['warn', 'error']
-        : ['error'],
-  });
-}
-
-export const prisma: PrismaClient =
-  globalForPrisma.__prisma ?? createPrismaClient();
-
-if (config.env !== 'production') {
-  globalForPrisma.__prisma = prisma;
-}
-
-/**
- * Gracefully disconnect from the database.
- * Call this from the shutdown handler.
- */
-export async function disconnectDatabase(): Promise<void> {
-  try {
-    await prisma.$disconnect();
-    console.log('[Database] Connection closed');
-  } catch (err) {
-    console.error('[Database] Error disconnecting:', err);
-  }
-}
+// DEPRECATED — superseded by src/config/database.ts as part of the Phase 2 restructure.
+//
+// This file is intentionally emptied (not deleted) because the automated
+// tooling used to carry out this restructure could only edit file content
+// on disk, not delete/rename files. It is excluded from the TypeScript
+// build via tsconfig.json ("exclude"), so it has no effect on compilation
+// or runtime. It is safe — and recommended — to delete this file and its
+// now-empty parent directory once you've verified the new structure works:
+//
+//   git rm "src/config/databaseConfig.ts"

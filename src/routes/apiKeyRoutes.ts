@@ -1,24 +1,10 @@
-import { Router } from 'express';
-import apiKeyController from '../controllers/apiKeyController';
-
-const router = Router();
-
-// Rate limiter for validation
-import rateLimit from 'express-rate-limit';
-const rateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    error: 'Too many validation attempts. Please try again later.',
-  },
-});
-
-router.post('/', apiKeyController.saveKey);
-router.get('/status', apiKeyController.getStatus);
-router.post('/validate', rateLimiter, apiKeyController.validateKey);
-router.delete('/', apiKeyController.removeKey);
-
-export default router;
+// DEPRECATED — superseded by src/http/routes/apiKey.routes.ts as part of the Phase 2 restructure.
+//
+// This file is intentionally emptied (not deleted) because the automated
+// tooling used to carry out this restructure could only edit file content
+// on disk, not delete/rename files. It is excluded from the TypeScript
+// build via tsconfig.json ("exclude"), so it has no effect on compilation
+// or runtime. It is safe — and recommended — to delete this file and its
+// now-empty parent directory once you've verified the new structure works:
+//
+//   git rm "src/routes/apiKeyRoutes.ts"

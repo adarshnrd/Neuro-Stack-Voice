@@ -2,6 +2,7 @@ import { SpeechEngine } from './speechEngine.js';
 import { RecognitionEngine } from './recognitionEngine.js';
 import { SocketManager } from './socketManager.js';
 import { UIManager } from './uiManager.js';
+import { AuthManager } from './authManager.js';
 
 // ============================================================
 // STATE MACHINE STATES
@@ -23,6 +24,8 @@ class App {
     this.speech     = new SpeechEngine();
     this.recognition = new RecognitionEngine();
     this.socket     = new SocketManager();
+    this.auth       = new AuthManager();
+    this.authMode   = 'login'; // 'login' | 'register'
 
     this.state              = STATE.IDLE;
     this.session            = null;
@@ -71,6 +74,105 @@ class App {
 
   // ---- Init ----
   async init() {
+    this._wireAuthForm();
+
+    const user = await this.auth.fetchCurrentUser();
+    if (user) {
+      await this._onAuthenticated();
+    } else {
+      this.ui.showPanel('auth-panel');
+    }
+  }
+
+  // ---- Auth form wiring (login/register panel) ----
+  _wireAuthForm() {
+    const form = this.ui.el('auth-form');
+    const toggleBtn = this.ui.el('btn-auth-toggle');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        this.authMode = this.authMode === 'login' ? 'register' : 'login';
+        const isLogin = this.authMode === 'login';
+        this.ui.el('auth-heading').textContent = isLogin ? 'Sign In to Continue' : 'Create Your Account';
+        this.ui.el('btn-auth-submit').textContent = isLogin ? 'Sign In' : 'Create Account';
+        this.ui.el('auth-toggle-text').textContent = isLogin ? "Don't have an account?" : 'Already have an account?';
+        toggleBtn.textContent = isLogin ? 'Create one' : 'Sign in';
+        this.ui.el('auth-password').setAttribute(
+          'autocomplete',
+          isLogin ? 'current-password' : 'new-password'
+        );
+        const errEl = this.ui.el('auth-error');
+        if (errEl) errEl.classList.add('hidden');
+      });
+    }
+
+    if (form) {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = this.ui.el('auth-email').value.trim();
+        const password = this.ui.el('auth-password').value;
+        const errEl = this.ui.el('auth-error');
+        const submitBtn = this.ui.el('btn-auth-submit');
+
+        if (errEl) errEl.classList.add('hidden');
+        if (submitBtn) submitBtn.disabled = true;
+
+        try {
+          if (this.authMode === 'login') {
+            await this.auth.login(email, password);
+          } else {
+            await this.auth.register(email, password);
+          }
+          await this._onAuthenticated();
+        } catch (err) {
+          if (errEl) {
+            errEl.textContent = err.message || 'Something went wrong. Please try again.';
+            errEl.classList.remove('hidden');
+          }
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
+        }
+      });
+    }
+
+    const logoutBtn = this.ui.el('btn-logout');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => this._logout());
+    }
+  }
+
+  async _logout() {
+    await this.auth.logout();
+    this.socket.disconnect();
+    this.restartApp();
+    this.ui.el('account-email')?.classList.add('hidden');
+    this.ui.el('btn-logout')?.classList.add('hidden');
+    this.ui.el('btn-history')?.classList.add('hidden');
+    this.ui.showPanel('auth-panel');
+  }
+
+  /** Runs once, right after the user is confirmed authenticated (fresh session-check or a successful login/register). */
+  async _onAuthenticated() {
+    const emailEl = this.ui.el('account-email');
+    if (emailEl && this.auth.user) {
+      emailEl.textContent = this.auth.user.email;
+      emailEl.classList.remove('hidden');
+    }
+    this.ui.el('btn-logout')?.classList.remove('hidden');
+    this.ui.el('btn-history')?.classList.remove('hidden');
+
+    this.socket.connect();
+
+    if (!this._appInitialized) {
+      this._appInitialized = true;
+      await this._initApp();
+    } else {
+      this.ui.showPanel('setup-panel');
+      this.setState(STATE.SETUP);
+    }
+  }
+
+  // ---- Main app init (runs once, after the first successful authentication) ----
+  async _initApp() {
     // Fetch server config first
     await this.fetchConfig();
 

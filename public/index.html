@@ -36,9 +36,14 @@
         <span>NeuroStack <strong>Voice</strong></span>
       </div>
       <div class="header-right">
-        <button id="btn-history" class="btn-header" aria-label="View interview history" title="Interview History">
+        <button id="btn-history" class="btn-header hidden" aria-label="View interview history" title="Interview History">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           History
+        </button>
+        <span id="account-email" class="account-email hidden"></span>
+        <button id="btn-logout" class="btn-header hidden" aria-label="Log out" title="Log out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Log out
         </button>
         <div class="status-indicator" id="global-status">
           <span class="pulse idle" id="status-pulse"></span>
@@ -48,8 +53,34 @@
     </header>
 
     <main>
+      <!-- ======================== AUTH PANEL ======================== -->
+      <section id="auth-panel" class="panel active">
+        <div class="setup-hero">
+          <div class="hero-badge">AI-Powered • Voice-First • Real-time</div>
+          <h1 id="auth-heading">Sign In to Continue</h1>
+          <p>Your interview history and settings are tied to your account. Sign in or create one to get started.</p>
+        </div>
+
+        <form id="auth-form" class="auth-form" novalidate>
+          <div class="form-group">
+            <label for="auth-email">Email</label>
+            <input type="email" id="auth-email" name="email" autocomplete="email" required maxlength="254" placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="auth-password">Password</label>
+            <input type="password" id="auth-password" name="password" autocomplete="current-password" required minlength="8" maxlength="256" placeholder="At least 8 characters">
+          </div>
+          <div id="auth-error" class="api-key-status error hidden"></div>
+          <button type="submit" id="btn-auth-submit" class="btn-primary btn-large" aria-label="Sign in">Sign In</button>
+          <p class="auth-toggle">
+            <span id="auth-toggle-text">Don't have an account?</span>
+            <button type="button" id="btn-auth-toggle" class="btn-link">Create one</button>
+          </p>
+        </form>
+      </section>
+
       <!-- ======================== SETUP PANEL ======================== -->
-      <section id="setup-panel" class="panel active">
+      <section id="setup-panel" class="panel hidden">
         <div class="setup-hero">
           <div class="hero-badge">AI-Powered • Voice-First • Real-time</div>
           <h1>Start Your Technical Interview</h1>

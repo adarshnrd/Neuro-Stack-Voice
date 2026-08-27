@@ -1,10 +1,5 @@
 import { AppError } from '../../utils/appError';
-import {
-  Question,
-  EvaluationResult,
-  FinalEvaluation,
-  GenerationOptions
-} from '../../interfaces';
+import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../types';
 
 // ─── Request helpers ────────────────────────────────────────────────────────
 
@@ -33,15 +28,20 @@ export function createTimeoutSignal(ms: number = DEFAULT_TIMEOUT_MS): AbortSigna
 
 /**
  * Determines if an error is transient and worth retrying.
+ *
+ * Deliberately excludes AbortError: an abort here means our own
+ * request-timeout fired (see createTimeoutSignal), so the provider already
+ * took the full DEFAULT_TIMEOUT_MS and didn't answer. Retrying that would
+ * silently compound the wait to 2-3x the configured timeout before the
+ * caller ever sees a failure.
  */
 function isRetryableError(error: unknown): boolean {
   if (error instanceof AppError) {
     // Retry 5xx server errors and rate limits (after backoff)
     return error.statusCode >= 500 || error.statusCode === 429;
   }
-  // Network errors, timeouts
+  // Network errors (DNS, connection reset, etc.) — but not our own timeout abort.
   if (error instanceof TypeError && error.message.includes('fetch')) return true;
-  if (error instanceof DOMException && error.name === 'AbortError') return true;
   return false;
 }
 
@@ -63,7 +63,7 @@ export async function withRetry<T>(
         const delay = BACKOFF_BASE_MS * Math.pow(2, attempt);
         console.warn(
           `[${providerName}] Request failed (attempt ${attempt + 1}/${maxRetries + 1}), ` +
-          `retrying in ${delay}ms:`,
+            `retrying in ${delay}ms:`,
           error instanceof Error ? error.message : error
         );
         await new Promise((r) => setTimeout(r, delay));
@@ -88,22 +88,15 @@ export function validateQuestions(data: unknown, providerName: string): Question
   if (data.length === 0) {
     throw new AppError(`${providerName} returned 0 questions`, 502);
   }
-  // Validate each question has required fields
   for (let i = 0; i < data.length; i++) {
     const q = data[i];
     if (!q || typeof q.question !== 'string' || !q.question.trim()) {
-      throw new AppError(
-        `${providerName} returned malformed question at index ${i}`,
-        502
-      );
+      throw new AppError(`${providerName} returned malformed question at index ${i}`, 502);
     }
-    // Ensure required fields have defaults
     q.id = q.id ?? i + 1;
     q.difficulty = q.difficulty ?? 'medium';
     q.topic = q.topic ?? 'General';
-    q.expectedKeywords = Array.isArray(q.expectedKeywords)
-      ? q.expectedKeywords
-      : [];
+    q.expectedKeywords = Array.isArray(q.expectedKeywords) ? q.expectedKeywords : [];
   }
   return data as Question[];
 }
@@ -111,10 +104,7 @@ export function validateQuestions(data: unknown, providerName: string): Question
 /**
  * Validates that parsed AI output matches the expected EvaluationResult shape.
  */
-export function validateEvaluation(
-  data: unknown,
-  providerName: string
-): EvaluationResult {
+export function validateEvaluation(data: unknown, providerName: string): EvaluationResult {
   if (!data || typeof data !== 'object') {
     throw new AppError(`${providerName} returned non-object for evaluation`, 502);
   }
@@ -129,79 +119,136 @@ export function validateEvaluation(
 /**
  * Validates that parsed AI output matches the expected FinalEvaluation shape.
  */
-export function validateFinalEvaluation(
-  data: unknown,
-  providerName: string
-): FinalEvaluation {
+export function validateFinalEvaluation(data: unknown, providerName: string): FinalEvaluation {
   if (!data || typeof data !== 'object') {
-    throw new AppError(
-      `${providerName} returned non-object for final evaluation`,
-      502
-    );
+    throw new AppError(`${providerName} returned non-object for final evaluation`, 502);
   }
   const obj = data as Record<string, unknown>;
   return {
     overallScore:
-      typeof obj.overallScore === 'number'
-        ? Math.min(100, Math.max(0, obj.overallScore))
-        : 0,
+      typeof obj.overallScore === 'number' ? Math.min(100, Math.max(0, obj.overallScore)) : 0,
     overallFeedback:
-      typeof obj.overallFeedback === 'string'
-        ? obj.overallFeedback
-        : 'No feedback provided.',
+      typeof obj.overallFeedback === 'string' ? obj.overallFeedback : 'No feedback provided.',
   };
 }
 
 // ─── Abstract base ──────────────────────────────────────────────────────────
 
+/**
+ * Base class for all AI provider services.
+ *
+ * IMPORTANT: instances are created PER REQUEST by AIFactory, never shared as
+ * module-level singletons. Earlier revisions kept one singleton per provider
+ * with mutable `currentModel` / `runtimeApiKey` fields — under concurrent
+ * requests, request A's model selection (and even API key) could be
+ * overwritten by request B between `setModel()` and the actual fetch call.
+ * Constructor injection makes that class of bug structurally impossible:
+ * each instance's `model` and `apiKey` are set once, at construction, and
+ * never mutated afterwards.
+ */
 export abstract class BaseAIService {
-  protected currentModel: string = '';
+  protected readonly model: string;
+  protected readonly apiKey?: string;
 
-  setModel(model: string): void {
-    this.currentModel = model;
+  constructor(model: string, apiKey?: string) {
+    this.model = model || this.getDefaultModel();
+    this.apiKey = apiKey;
   }
 
   getActiveModel(): string {
-    return this.currentModel || this.getDefaultModel();
+    return this.model;
   }
 
   /**
    * Sanitises a raw JSON string by escaping unescaped control characters
-   * (newlines, carriage returns, tabs) that appear inside JSON string values.
-   * LLMs frequently return these when their output contains code blocks.
+   * (newlines, carriage returns, tabs) that appear INSIDE JSON string
+   * values — without touching structural whitespace between tokens.
+   *
+   * The previous implementation escaped every unescaped control character
+   * anywhere in the text, including the newlines LLMs routinely emit
+   * between top-level array/object elements for readability. That mangled
+   * otherwise-valid JSON into a string JSON.parse would reject, so the
+   * "sanitised parse" fallback stage could essentially never succeed —
+   * only the far coarser regex-extraction stage ever recovered anything.
+   *
+   * This version tracks whether we're inside a string literal (honoring
+   * escape sequences and skipping escaped quotes) and only rewrites control
+   * characters while inside one.
    */
   protected sanitizeJsonString(text: string): string {
-    // Replace literal control characters that are NOT already escaped
-    return text
-      .replace(/(?<!\\)\n/g, '\\n')
-      .replace(/(?<!\\)\r/g, '\\r')
-      .replace(/(?<!\\)\t/g, '\\t');
+    let result = '';
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+
+      if (inString) {
+        if (escaped) {
+          result += ch;
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          result += ch;
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') {
+          inString = false;
+          result += ch;
+          continue;
+        }
+        if (ch === '\n') {
+          result += '\\n';
+          continue;
+        }
+        if (ch === '\r') {
+          result += '\\r';
+          continue;
+        }
+        if (ch === '\t') {
+          result += '\\t';
+          continue;
+        }
+        result += ch;
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = true;
+      }
+      result += ch;
+    }
+
+    return result;
   }
 
   /**
    * Robust JSON extraction with multi-stage fallback:
    * 1. Direct parse
-   * 2. Sanitised parse (escapes stray control chars)
+   * 2. Sanitised parse (escapes stray control chars inside string literals)
    * 3. Regex extraction + sanitised parse
    */
   protected extractJson(text: string, providerName: string): unknown {
-    // 1 — direct parse
     try {
       return JSON.parse(text);
-    } catch (_) { /* fall through */ }
+    } catch {
+      /* fall through */
+    }
 
-    // 2 — sanitise then parse
     try {
       return JSON.parse(this.sanitizeJsonString(text));
-    } catch (_) { /* fall through */ }
+    } catch {
+      /* fall through */
+    }
 
-    // 3 — extract JSON object / array via regex, then sanitise + parse
     try {
       const match = text.match(/\[[\s\S]*\]|\{[\s\S]*\}/);
       if (match) {
         try {
           return JSON.parse(match[0]);
-        } catch (_) {
+        } catch {
           return JSON.parse(this.sanitizeJsonString(match[0]));
         }
       }
@@ -214,7 +261,13 @@ export abstract class BaseAIService {
   }
 
   abstract getDefaultModel(): string;
-  abstract generateQuestions(techStack: string, count: number, options?: GenerationOptions): Promise<Question[]>;
+  abstract generateQuestions(
+    techStack: string,
+    count: number,
+    options?: GenerationOptions
+  ): Promise<Question[]>;
   abstract evaluateAnswer(question: string, answer: string): Promise<EvaluationResult>;
-  abstract evaluateInterview(qaPairs: {question: string, answer: string}[]): Promise<FinalEvaluation>;
+  abstract evaluateInterview(
+    qaPairs: { question: string; answer: string }[]
+  ): Promise<FinalEvaluation>;
 }

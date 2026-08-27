@@ -1,0 +1,47 @@
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      TRUST_PROXY_HOPS: 0
+      DATABASE_URL: postgresql://neurostack:neurostack@db:5432/neurostack?schema=public
+      DIRECT_URL: postgresql://neurostack:neurostack@db:5432/neurostack?schema=public
+      # Set real values via a .env file (docker compose --env-file) or your
+      # orchestrator's secret store — do NOT bake real secrets into this
+      # file. See .env.example for the full list.
+      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET:?Set ENCRYPTION_SECRET (32+ chars) in your environment or a .env file}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (32+ chars, different from ENCRYPTION_SECRET) in your environment or a .env file}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: neurostack
+      POSTGRES_PASSWORD: neurostack
+      POSTGRES_DB: neurostack
+    ports:
+      - '5432:5432'
+    volumes:
+      - nsv_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U neurostack']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  nsv_postgres_data:
