@@ -63,10 +63,25 @@ export class SocketManager {
     this.socket.on('reconnect_failed', () => {
       console.error('[Socket] Reconnection failed after all attempts');
       this.connected = false;
+      window.dispatchEvent(new CustomEvent('socket:reconnect-failed'));
     });
 
     this.socket.on('error', (err) => {
       console.error('[Socket] Error:', err);
+    });
+
+    // Handle "Session ID unknown" — happens when the server restarts (e.g. Render
+    // free-tier spin-down) and the client tries to resume an expired session.
+    // Stop retrying immediately; the app will reconnect fresh on the next action.
+    this.socket.on('connect_error', (err) => {
+      const msg = err && (err.message || err.description || '');
+      if (msg.includes('Session ID unknown') || (err && err.code === 1)) {
+        console.warn('[Socket] Server session expired (server restarted). Resetting connection.');
+        this.socket.disconnect();
+        this.connected = false;
+        this._pendingSessionId = null;
+        window.dispatchEvent(new CustomEvent('socket:session-expired'));
+      }
     });
   }
 

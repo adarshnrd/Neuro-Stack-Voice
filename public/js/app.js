@@ -91,6 +91,13 @@ class App {
 
   // ---- Init ----
   async init() {
+    // NOTE: Auth bypassed for UI testing — remove this block to re-enable login.
+    // -------------------------------------------------------------------------
+    this.auth.user = { id: 'dev', email: 'dev@local' };
+    await this._onAuthenticated();
+    return;
+    // -------------------------------------------------------------------------
+
     // Note: _wireAuthForm() is called in the constructor before this, so auth UI
     // is always wired regardless of whether speech/socket engines succeeded.
     const user = await this.auth.fetchCurrentUser();
@@ -288,6 +295,19 @@ class App {
     });
     if (this.socket) this.socket.on('reconnect_failed', () => {
       this._showToast('Unable to reconnect. Please refresh the page.', 'error');
+    });
+
+    // Server restarted (e.g. Render free-tier spin-down) — session is gone.
+    window.addEventListener('socket:session-expired', () => {
+      this._showToast('Server restarted — refreshing connection...', 'warning');
+      // Re-connect with a fresh socket after a short delay
+      setTimeout(() => {
+        if (this.socket) this.socket.connect();
+      }, 2000);
+    });
+
+    window.addEventListener('socket:reconnect-failed', () => {
+      this._showToast('Connection lost. Please refresh the page.', 'error');
     });
 
     this.setState(STATE.SETUP);
