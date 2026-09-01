@@ -1,5 +1,16 @@
 export class SocketManager {
   constructor() {
+    this.listeners = {};
+    this.connected = false;
+    this._pendingSessionId = null;
+
+    // Guard: socket.io script may not have loaded yet (cold start, network error, etc.)
+    if (typeof window.io !== 'function') {
+      console.warn('[Socket] socket.io (window.io) is not available — real-time features disabled until page reload.');
+      this.socket = null;
+      return;
+    }
+
     // autoConnect: false — the server now requires a valid session cookie
     // at handshake time (see src/sockets/auth.ts), so connecting before the
     // user is authenticated would just fail and retry pointlessly. Call
@@ -11,26 +22,24 @@ export class SocketManager {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10000,
     });
-    this.listeners = {};
-    this.connected = false;
-    this._pendingSessionId = null;
 
     this.setupSocket();
   }
 
   /** Opens the connection. Safe to call once the auth cookie is set. */
   connect() {
-    if (!this.socket.connected) this.socket.connect();
+    if (this.socket && !this.socket.connected) this.socket.connect();
   }
 
   /** Closes the connection (e.g. on logout) so a stale session isn't reused. */
   disconnect() {
-    this.socket.disconnect();
+    if (this.socket) this.socket.disconnect();
     this.connected = false;
     this._pendingSessionId = null;
   }
 
   setupSocket() {
+    if (!this.socket) return;
     this.socket.on('connect', () => {
       console.log('[Socket] Connected to server');
       this.connected = true;
@@ -67,11 +76,11 @@ export class SocketManager {
   }
 
   on(event, callback) {
-    this.socket.on(event, callback);
+    if (this.socket) this.socket.on(event, callback);
   }
 
   emit(event, data) {
-    this.socket.emit(event, data);
+    if (this.socket) this.socket.emit(event, data);
   }
 
   joinSession(sessionId) {

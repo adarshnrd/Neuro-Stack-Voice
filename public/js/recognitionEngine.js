@@ -1,10 +1,16 @@
 export class RecognitionEngine {
   constructor() {
+    this.supported = false;
+    this.recognition = null;
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      throw new Error('Speech Recognition API not supported. Please use Google Chrome.');
+      // Don't throw — just mark as unsupported so the rest of the app (auth, etc.) still works.
+      console.warn('[RecognitionEngine] Speech Recognition API not available. Voice input will be disabled.');
+      return;
     }
 
+    this.supported = true;
     this.recognition = new SpeechRecognition();
     this.recognition.continuous     = true;
     this.recognition.interimResults = true;
@@ -33,7 +39,12 @@ export class RecognitionEngine {
     this.silenceDuration = ms;
   }
 
+  isSupported() {
+    return this.supported;
+  }
+
   _setupListeners() {
+    if (!this.supported) return;
     this.recognition.onresult = (event) => {
       this._resetSilenceTimer();
 
@@ -112,6 +123,10 @@ export class RecognitionEngine {
    * Start fresh recording
    */
   start(onResult, onSilence) {
+    if (!this.supported) {
+      console.warn('[RecognitionEngine] start() called but Speech Recognition is not supported.');
+      return;
+    }
     this.onResultCallback  = onResult;
     this.onSilenceCallback = onSilence;
     this.finalTranscript   = '';
@@ -134,6 +149,10 @@ export class RecognitionEngine {
    * Start in "continue" mode — preserves previous transcript and appends new speech.
    */
   startContinue(previousText, onResult, onSilence) {
+    if (!this.supported) {
+      console.warn('[RecognitionEngine] startContinue() called but Speech Recognition is not supported.');
+      return;
+    }
     this.onResultCallback  = onResult;
     this.onSilenceCallback = onSilence;
     this.previousTranscript = previousText || '';
@@ -153,6 +172,7 @@ export class RecognitionEngine {
   }
 
   stop() {
+    if (!this.supported) return;
     this.shouldRestart = false;
     this.isListening   = false;
     this.isResumeMode  = false;

@@ -20,12 +20,10 @@ const STATE = {
 
 class App {
   constructor() {
-    this.ui         = new UIManager();
-    this.speech     = new SpeechEngine();
-    this.recognition = new RecognitionEngine();
-    this.socket     = new SocketManager();
-    this.auth       = new AuthManager();
-    this.authMode   = 'login'; // 'login' | 'register'
+    this.ui     = new UIManager();
+    this.speech = new SpeechEngine();
+    this.auth   = new AuthManager();
+    this.authMode = 'login'; // 'login' | 'register'
 
     this.state              = STATE.IDLE;
     this.session            = null;
@@ -41,6 +39,25 @@ class App {
       jdQuestionsPerInterview: 15,
       silenceTimeoutMs: 5000,
     };
+
+    // Wire auth form NOW — before any engine that could throw, so login/register
+    // always works even if Speech Recognition or Socket.IO is unavailable.
+    this._wireAuthForm();
+
+    // Engines that may not be available in all browsers / on cold boot:
+    try {
+      this.recognition = new RecognitionEngine();
+    } catch (e) {
+      console.warn('[App] Speech Recognition unavailable:', e.message);
+      this.recognition = null;
+    }
+
+    try {
+      this.socket = new SocketManager();
+    } catch (e) {
+      console.warn('[App] SocketManager failed to init:', e.message);
+      this.socket = null;
+    }
 
     this.init();
   }
@@ -74,8 +91,8 @@ class App {
 
   // ---- Init ----
   async init() {
-    this._wireAuthForm();
-
+    // Note: _wireAuthForm() is called in the constructor before this, so auth UI
+    // is always wired regardless of whether speech/socket engines succeeded.
     const user = await this.auth.fetchCurrentUser();
     if (user) {
       await this._onAuthenticated();
@@ -142,7 +159,7 @@ class App {
 
   async _logout() {
     await this.auth.logout();
-    this.socket.disconnect();
+    if (this.socket) this.socket.disconnect();
     this.restartApp();
     this.ui.el('account-email')?.classList.add('hidden');
     this.ui.el('btn-logout')?.classList.add('hidden');
@@ -160,7 +177,7 @@ class App {
     this.ui.el('btn-logout')?.classList.remove('hidden');
     this.ui.el('btn-history')?.classList.remove('hidden');
 
-    this.socket.connect();
+    if (this.socket) this.socket.connect();
 
     if (!this._appInitialized) {
       this._appInitialized = true;
@@ -183,7 +200,7 @@ class App {
     this.ui.triggerTechStackChange();
 
     // Configure recognition engine with server-side silence timeout
-    this.recognition.setSilenceTimeout(this.serverConfig.silenceTimeoutMs);
+    if (this.recognition) this.recognition.setSilenceTimeout(this.serverConfig.silenceTimeoutMs);
 
     // Button events
     this.ui.el('btn-start').addEventListener('click', () => this.startInterview());
@@ -242,8 +259,8 @@ class App {
       techEl.addEventListener('change', () => this.onTechStackChange());
     }
 
-    // Socket events
-    this.socket.on('answer:evaluated', (data) => {
+    // Socket events (only wire if socket is available)
+    if (this.socket) this.socket.on('answer:evaluated', (data) => {
       console.log('[App] Evaluation received for Q' + data.questionId, data.evaluation);
       // Store the evaluation
       this.evaluationResults[data.questionId] = data.evaluation;
@@ -252,24 +269,24 @@ class App {
       this.nextQuestion();
     });
 
-    this.socket.on('interview:complete', (data) => {
+    if (this.socket) this.socket.on('interview:complete', (data) => {
       console.log('[App] Interview complete', data);
       this.showCompletion(data.summary);
     });
 
-    this.socket.on('error', (err) => {
+    if (this.socket) this.socket.on('error', (err) => {
       console.error('[App] Socket error:', err);
       this._showToast('Error: ' + (err.message || 'Something went wrong'), 'error');
     });
 
     // Socket connection state changes
-    this.socket.on('disconnect', () => {
+    if (this.socket) this.socket.on('disconnect', () => {
       this._showToast('Connection lost. Reconnecting...', 'warning');
     });
-    this.socket.on('reconnect', () => {
+    if (this.socket) this.socket.on('reconnect', () => {
       this._showToast('Reconnected!', 'success');
     });
-    this.socket.on('reconnect_failed', () => {
+    if (this.socket) this.socket.on('reconnect_failed', () => {
       this._showToast('Unable to reconnect. Please refresh the page.', 'error');
     });
 
@@ -414,7 +431,7 @@ class App {
       this.currentQuestionIndex = 0;
       this.evaluationResults    = {};
 
-      this.socket.joinSession(this.session.id);
+      if (this.socket) this.socket.joinSession(this.session.id);
 
       // Show interview panel with stack badge
       this.ui.el('interview-stack-badge').textContent = techStack;
@@ -439,7 +456,7 @@ class App {
       this.ui.el('loading-title').textContent   = 'Evaluating Performance';
       this.ui.el('loading-subtitle').textContent = 'AI is analyzing your complete interview...';
       this.ui.showPanel('loading-panel');
-      this.socket.endSession(this.session.id);
+      if (this.socket) this.socket.endSession(this.session.id);
       return;
     }
 
@@ -468,6 +485,10 @@ class App {
 
   // ---- Start listening ----
   startListening() {
+    if (!this.recognition || !this.recognition.supported) {
+      this._showToast('Speech Recognition is not available in this browser. Please use Chrome.', 'error');
+      return;
+    }
     this.setState(STATE.LISTENING);
     this.ui.showLiveTranscript();
     this.ui.el('live-transcript').innerHTML = '<span class="placeholder-text">Listening... speak your answer</span>';
@@ -552,7 +573,7 @@ class App {
     this.ui.showLiveTranscript();
     this.ui.el('live-transcript').innerHTML = '<span class="placeholder-text"><em>Submitting & evaluating answer...</em></span>';
 
-    this.socket.sendFinalAnswer(this.session.id, q.id, text);
+    if (this.socket) this.socket.sendFinalAnswer(this.session.id, q.id, text);
   }
 
   // ---- Next question ----
@@ -617,7 +638,7 @@ class App {
     this.questions            = [];
     this.currentQuestionIndex = 0;
     this.evaluationResults    = {};
-    this.socket.clearSession();
+    if (this.socket) this.socket.clearSession();
 
     const startBtn = this.ui.el('btn-start');
     startBtn.disabled  = false;
@@ -642,7 +663,7 @@ class App {
 
     // Stop any active speech or recognition
     this.speech.cancel();
-    this.recognition.stop();
+    if (this.recognition) this.recognition.stop();
     this.ui.setWaveformActive(false);
     this.ui.hideSilenceIndicator();
 
@@ -654,7 +675,7 @@ class App {
       : 'Wrapping up your interview...';
     this.ui.showPanel('loading-panel');
 
-    this.socket.endSession(this.session.id);
+    if (this.socket) this.socket.endSession(this.session.id);
   }
 
   // ---- History ----
@@ -705,6 +726,7 @@ class App {
   // ---- Manual Stop Recording ----
   manualStopRecording() {
     if (this.state !== STATE.LISTENING) return;
+    if (!this.recognition) return;
 
     this.recognition.stop();
 
