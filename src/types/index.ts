@@ -5,7 +5,9 @@
 // config/ — see DIFFICULTY_LEVEL_PLAN.md. The actual level DEFINITIONS
 // (rubric weights, prompts, score anchors) live only in
 // difficultyLevels.ts; this is just the id union.
-export type { DifficultyLevelId as DifficultyLevel } from '../config/difficultyLevels';
+import type { DifficultyLevelId } from '../config/difficultyLevels';
+/** Convenience alias — see difficultyLevels.ts for the full union. */
+export type DifficultyLevel = DifficultyLevelId;
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
