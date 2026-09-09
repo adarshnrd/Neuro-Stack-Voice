@@ -36,11 +36,21 @@
         <span>NeuroStack <strong>Voice</strong></span>
       </div>
       <div class="header-right">
-        <button id="btn-history" class="btn-header hidden" aria-label="View interview history" title="Interview History">
+        <!-- Always visible: anonymous local history and email-based history
+             (see docs/OPTIONAL_HISTORY_LOOKUP_PLAN.md) both work without an
+             account, so History is no longer gated behind login. -->
+        <button id="btn-history" class="btn-header" aria-label="View interview history" title="Interview History">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           History
         </button>
         <span id="account-email" class="account-email hidden"></span>
+        <!-- Signing in is now an optional upgrade (ties history to a real
+             account instead of a browser + email), not a gate to using the
+             app — shown only when no account session is active. -->
+        <button id="btn-signin" class="btn-header hidden" aria-label="Sign in to save interviews to an account" title="Sign in">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Sign in
+        </button>
         <button id="btn-logout" class="btn-header hidden" aria-label="Log out" title="Log out">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           Log out
@@ -54,7 +64,13 @@
 
     <main>
       <!-- ======================== AUTH PANEL ======================== -->
-      <section id="auth-panel" class="panel active">
+      <!-- No inline display:none here on purpose — showPanel() (uiManager.js)
+           only toggles the .hidden/.active classes, and an inline style
+           would out-specificity .panel.active and keep this panel stuck
+           hidden forever once shown (this bug never surfaced before because
+           the auth panel was unreachable behind the old dev-only auth
+           bypass — see init()/_continueAsGuest() in app.js). -->
+      <section id="auth-panel" class="panel hidden">
         <div class="setup-hero">
           <div class="hero-badge">AI-Powered • Voice-First • Real-time</div>
           <h1 id="auth-heading">Sign In to Continue</h1>
@@ -76,15 +92,46 @@
             <span id="auth-toggle-text">Don't have an account?</span>
             <button type="button" id="btn-auth-toggle" class="btn-link">Create one</button>
           </p>
+          <!-- An account is an optional upgrade, not a requirement — anyone
+               can start an interview anonymously (optionally tagging it
+               with an email) from the setup screen instead. -->
+          <p class="auth-toggle">
+            <button type="button" id="btn-auth-cancel" class="btn-link">Continue without an account</button>
+          </p>
         </form>
       </section>
 
       <!-- ======================== SETUP PANEL ======================== -->
-      <section id="setup-panel" class="panel hidden">
+      <section id="setup-panel" class="panel active">
         <div class="setup-hero">
           <div class="hero-badge">AI-Powered • Voice-First • Real-time</div>
           <h1>Start Your Technical Interview</h1>
           <p>Select your tech stack and AI model. The interviewer will ask tailored questions, listen to your answers, and give you detailed feedback.</p>
+        </div>
+
+        <!-- Save-for-later email tag (fully optional — no account, no
+             verification). This box only tags the interview you're about
+             to start; to look up interviews already saved, use History in
+             the header (it will ask for this same email if it doesn't
+             already know one for this browser) — see the "View your
+             history" link below and docs/OPTIONAL_HISTORY_LOOKUP_PLAN.md. -->
+        <div class="returning-visitor-box">
+          <div class="returning-visitor-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            Save to history <span class="optional-badge">Optional</span>
+          </div>
+          <p class="field-hint">Add the email you'd like to use so you can find this interview later — or leave it blank to stay fully anonymous.</p>
+          <div class="returning-visitor-row">
+            <input type="email" id="returning-email" placeholder="you@example.com" autocomplete="email" maxlength="254">
+          </div>
+          <!-- Consent notice — see docs/audit/01-BACKLOG-P0-P3.md [P1-04].
+               This lookup has no password/PIN by design (Option B in
+               docs/OPTIONAL_HISTORY_LOOKUP_PLAN.md); anyone who knows this
+               email can pull up these results, so the person tagging an
+               interview with it needs to know that up front. -->
+          <p class="field-hint" id="returning-email-consent-hint">Anyone who knows this email can look up and view these interview results — there's no password on this lookup. Use an email only you're likely to know, or leave it blank.</p>
+          <div id="returning-email-status" class="api-key-status hidden"></div>
+          <button type="button" id="btn-goto-history-from-setup" class="btn-link returning-visitor-history-link">Already have interviews saved? View your history</button>
         </div>
 
         <div class="setup-grid">
@@ -122,6 +169,24 @@
           </div>
         </div>
 
+        <!-- Interview Level (see docs/project-improvement/DIFFICULTY_LEVEL_PLAN.md).
+             Full-width, below the 3-column grid above — each level needs a
+             line of explanation a cramped 4th dropdown column couldn't fit.
+             Cards are populated by JS (uiManager.js's populateLevelPicker)
+             from GET /api/interviews/config's difficultyLevels list, so the
+             labels/blurbs here can never drift from what POST /start
+             actually accepts. Stays visible in JD mode too — the level is
+             an explicit, separate choice from the job description. -->
+        <div class="form-group level-picker-group">
+          <label id="level-picker-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 6 6 1-4.5 4 1 6-5.5-3-5.5 3 1-6L3 9l6-1 3-6z"/></svg>
+            Interview Level
+          </label>
+          <div id="level-cards" class="level-cards" role="radiogroup" aria-labelledby="level-picker-label">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+
         <!-- Job Description Textarea (shown when JD mode selected) -->
         <div id="jd-input-group" class="form-group jd-group hidden">
           <label for="jd-textarea">
@@ -134,6 +199,56 @@
             <span class="char-count"><span id="jd-char-count">0</span> / 5,000 characters</span>
             <span class="jd-hint">Minimum 15 deep questions will be generated</span>
           </div>
+        </div>
+
+        <!-- Resume Textarea (shown when Resume mode selected) — see
+             docs/project-improvement/RESUME_MODE_PLAN.md §10.1. Nothing
+             here is ever "uploaded": the pasted text is sent once to
+             POST /resume/analyze, parsed server-side into a PII-stripped
+             profile, and the raw text is discarded after that call — only
+             the extracted profile below is kept and later sent to
+             POST /start. -->
+        <div id="resume-input-group" class="form-group jd-group resume-group hidden">
+          <label for="resume-textarea">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Paste Your Resume
+          </label>
+          <textarea id="resume-textarea" rows="8" maxlength="10000"
+            placeholder="Paste your resume text here. The AI will extract your tech stack, projects and experience, then tailor interview questions to it — opening with an introduction and a question about your best project..."></textarea>
+          <div class="jd-meta">
+            <span class="char-count"><span id="resume-char-count">0</span> / 10,000 characters</span>
+            <span class="jd-hint" id="resume-hint">Analyze your resume before starting</span>
+          </div>
+          <button type="button" id="btn-analyze-resume" class="btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Analyze Resume
+          </button>
+          <div id="resume-analysis-status" class="api-key-status hidden"></div>
+          <div id="resume-analysis-summary" class="resume-analysis-summary hidden">
+            <!-- Populated by JS: uiManager.renderResumeAnalysis -->
+          </div>
+        </div>
+
+        <!-- Number of Questions (see
+             docs/project-improvement/RESUME_MODE_PLAN.md §7). Optional
+             override — leaving it untouched keeps today's exact per-stack
+             default behavior (10 for most stacks, 15+ for Job
+             Description, enforced server-side). Picking an option sends
+             an explicit questionsCount to POST /start for ANY tech stack. -->
+        <div class="form-group question-count-group">
+          <label id="question-count-label">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            Number of Questions
+          </label>
+          <div id="question-count-options" class="count-options" role="radiogroup" aria-labelledby="question-count-label">
+            <button type="button" class="count-option" data-count="5">5</button>
+            <button type="button" class="count-option" data-count="10">10</button>
+            <button type="button" class="count-option" data-count="15">15</button>
+            <button type="button" class="count-option" data-count="20">20</button>
+            <button type="button" class="count-option" data-count="custom">Custom</button>
+          </div>
+          <input type="number" id="question-count-custom" class="count-custom-input hidden" min="1" max="50" step="1" placeholder="1–50" aria-label="Custom number of questions">
+          <p class="field-hint" id="question-count-hint">Using the default for your tech stack.</p>
         </div>
 
         <!-- Advanced Settings (collapsible) -->
@@ -214,7 +329,10 @@
               End Interview
             </button>
           </div>
-          <div class="interview-stack-badge" id="interview-stack-badge"></div>
+          <div class="badge-row">
+            <div class="interview-stack-badge" id="interview-stack-badge"></div>
+            <div class="level-badge" id="interview-level-badge"></div>
+          </div>
         </div>
 
         <div class="question-card">
@@ -247,8 +365,8 @@
             </div>
             <!-- Live meta (char limit validation) -->
             <div id="live-meta" class="live-meta hidden" style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 0.8rem; color: var(--text-2);">
-              <span id="live-char-count">0 / 1,000 characters</span>
-              <span id="live-validation-warning" class="error-text hidden" style="color: var(--red); font-weight: 500;">⚠️ Exceeds 1,000 characters limit!</span>
+              <span id="live-char-count">0 / 4,000 characters</span>
+              <span id="live-validation-warning" class="error-text hidden" style="color: var(--red); font-weight: 500;">⚠️ Exceeds 4,000 characters limit!</span>
             </div>
             <!-- Manual stop recording button -->
             <div class="listening-actions" style="margin-top: 12px; display: flex; justify-content: flex-end;">
@@ -271,8 +389,15 @@
             <textarea id="edit-transcript-input" rows="5" placeholder="Your transcribed answer appears here — edit if needed..."></textarea>
             <!-- Edit meta (char limit validation) -->
             <div class="edit-meta" style="display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 0.8rem; color: var(--text-2);">
-              <span id="edit-char-count">0 / 1,000 characters</span>
-              <span id="edit-validation-warning" class="error-text hidden" style="color: var(--red); font-weight: 500;">⚠️ Exceeds 1,000 characters limit!</span>
+              <span id="edit-char-count">0 / 4,000 characters</span>
+              <span id="edit-validation-warning" class="error-text hidden" style="color: var(--red); font-weight: 500;">⚠️ Exceeds 4,000 characters limit!</span>
+            </div>
+            <!-- Server-side transcript improvement status — see
+                 docs/project-improvement/VOICE_RECOGNITION_ACCURACY_PLAN.md -->
+            <div id="transcript-enhance-status" class="transcript-enhance-status hidden" role="status" aria-live="polite">
+              <span id="transcript-enhance-spinner" class="transcript-enhance-spinner" aria-hidden="true"></span>
+              <span id="transcript-enhance-message"></span>
+              <button id="btn-undo-enhance" type="button" class="link-btn hidden">Undo</button>
             </div>
             <div class="edit-actions">
               <button id="btn-retry-answer" class="btn-secondary" aria-label="Record again from start">
@@ -346,7 +471,19 @@
             </div>
           </div>
           <div class="score-meta">
-            <div class="score-grade" id="score-grade">—</div>
+            <div class="score-grade-row">
+              <div class="score-grade" id="score-grade">—</div>
+              <div class="level-badge" id="completion-level-badge"></div>
+            </div>
+            <!-- Shown only when finalEvaluation.overallFeedbackStatus is
+                 'stale' — see docs/project-improvement/RICH_EVALUATION_SCALE_PLAN.md
+                 §6: the score above is always kept current automatically,
+                 but the write-up below only updates when explicitly
+                 refreshed. -->
+            <div id="final-feedback-status" class="feedback-status-banner hidden">
+              <span>Overall feedback was generated before a later answer finished scoring.</span>
+              <button type="button" id="btn-refresh-feedback" class="btn-link">Refresh overall feedback</button>
+            </div>
             <p id="final-feedback">Analyzing your interview performance...</p>
           </div>
         </div>
@@ -380,6 +517,27 @@
           </button>
           <h2>Interview History</h2>
         </div>
+
+        <!-- The single entry point for the email-based lookup (see
+             docs/OPTIONAL_HISTORY_LOOKUP_PLAN.md): if this browser already
+             knows an email (it was used to save an interview here before),
+             its history loads automatically and this box just shows who
+             it's for. Otherwise it asks — no separate "load history"
+             button on the setup screen anymore. -->
+        <div class="history-email-lookup" id="history-email-lookup">
+          <p class="field-hint" id="history-lookup-hint">Have interviews from another device? Enter your email to find them.</p>
+          <div class="returning-visitor-row">
+            <input type="email" id="history-lookup-email" placeholder="you@example.com" autocomplete="email" maxlength="254">
+            <button type="button" id="btn-history-lookup" class="btn-secondary">Find</button>
+          </div>
+          <!-- Consent notice — see docs/audit/01-BACKLOG-P0-P3.md [P1-04]:
+               this lookup requires no password/PIN, so anyone who knows an
+               email used here can see the same results. -->
+          <p class="field-hint" id="history-lookup-consent-hint">This lookup has no password — anyone who knows an email that was used to save an interview can see its results this same way.</p>
+          <button type="button" id="btn-clear-remembered-email" class="btn-link hidden">Not you? Forget this email</button>
+          <div id="history-lookup-status" class="api-key-status hidden"></div>
+        </div>
+
         <div id="history-list" class="history-list">
           <!-- Populated by JS -->
         </div>
@@ -409,7 +567,14 @@
             </div>
           </div>
           <div class="score-meta">
-            <div class="score-grade" id="detail-grade">—</div>
+            <div class="score-grade-row">
+              <div class="score-grade" id="detail-grade">—</div>
+              <div class="level-badge" id="detail-level-badge"></div>
+            </div>
+            <div id="detail-feedback-status" class="feedback-status-banner hidden">
+              <span>Overall feedback was generated before a later answer finished scoring.</span>
+              <button type="button" id="btn-detail-refresh-feedback" class="btn-link">Refresh overall feedback</button>
+            </div>
             <p id="detail-feedback">Loading...</p>
           </div>
         </div>

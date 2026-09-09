@@ -4,9 +4,18 @@ import {
   validateQuestions,
   validateEvaluation,
   validateFinalEvaluation,
+  validateResumeProfile,
 } from '../../src/services/ai/baseService';
 import { AppError } from '../../src/utils/appError';
-import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../src/types';
+import {
+  Question,
+  EvaluationResult,
+  EvaluationDigestItem,
+  FinalEvaluation,
+  GenerationOptions,
+  AnswerGuidanceResult,
+  ResumeProfile,
+} from '../../src/types';
 
 /** Minimal concrete subclass so we can exercise the protected helpers. */
 class TestAIService extends BaseAIService {
@@ -19,7 +28,16 @@ class TestAIService extends BaseAIService {
   async evaluateAnswer(_q: string, _a: string): Promise<EvaluationResult> {
     throw new Error('not used in these tests');
   }
-  async evaluateInterview(_p: { question: string; answer: string }[]): Promise<FinalEvaluation> {
+  async evaluateInterview(_digest: EvaluationDigestItem[]): Promise<FinalEvaluation> {
+    throw new Error('not used in these tests');
+  }
+  async generateAnswerGuidance(_q: string, _topic?: string): Promise<AnswerGuidanceResult> {
+    throw new Error('not used in these tests');
+  }
+  // Abstract on BaseAIService as of RESUME_MODE_PLAN.md — every concrete
+  // subclass (this test double included) must implement it, even though
+  // no test here exercises it directly.
+  async extractResumeProfile(_resumeText: string): Promise<ResumeProfile> {
     throw new Error('not used in these tests');
   }
 
@@ -110,15 +128,19 @@ describe('validateQuestions', () => {
 
 describe('validateEvaluation', () => {
   it('clamps score into [0, 10]', () => {
-    expect(validateEvaluation({ score: 15, feedback: 'x', betterAnswer: 'y' }, 'Test').score).toBe(10);
-    expect(validateEvaluation({ score: -3, feedback: 'x' }, 'Test').score).toBe(0);
+    expect(validateEvaluation({ score: 15, summary: 'x', betterAnswer: 'y' }, 'Test').score).toBe(10);
+    expect(validateEvaluation({ score: -3, summary: 'x' }, 'Test').score).toBe(0);
   });
 
-  it('defaults missing fields', () => {
+  it('defaults missing fields (fully separate structured fields, per RICH_EVALUATION_SCALE_PLAN.md §3/§9)', () => {
     const result = validateEvaluation({}, 'Test');
     expect(result.score).toBe(0);
-    expect(result.feedback).toBe('No feedback provided.');
+    expect(result.summary).toBe('No summary provided.');
+    expect(result.strengths).toBe('');
+    expect(result.gaps).toBe('');
+    expect(result.improvementAreas).toBe('');
     expect(result.betterAnswer).toBe('');
+    expect(result.studyPoints).toEqual([]);
   });
 });
 
@@ -156,5 +178,120 @@ describe('withRetry', () => {
     });
     await expect(withRetry(fn, 'Test', 2)).rejects.toThrow();
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+// See docs/project-improvement/RESUME_MODE_PLAN.md §4.1/§9 — this
+// validator runs on BOTH a fresh AI extraction (untrusted model output)
+// AND a client-submitted profile round-tripped through POST /start
+// (untrusted input either way), so every one of these has to hold
+// regardless of which caller triggered it.
+describe('validateResumeProfile', () => {
+  it('rejects a non-object payload', () => {
+    expect(() => validateResumeProfile(null, 'Test')).toThrow(AppError);
+    expect(() => validateResumeProfile('a string', 'Test')).toThrow(AppError);
+    expect(() => validateResumeProfile(42, 'Test')).toThrow(AppError);
+  });
+
+  it('defaults an empty object to an all-empty, non-throwing profile', () => {
+    const result = validateResumeProfile({}, 'Test');
+    expect(result).toEqual({
+      primarySkills: [],
+      secondarySkills: [],
+      projects: [],
+      domains: [],
+      yearsOfExperience: null,
+      inferredLevel: null,
+      notableClaims: [],
+    });
+  });
+
+  it('caps primarySkills/secondarySkills at 12 entries each', () => {
+    const many = Array.from({ length: 20 }, (_, i) => `skill-${i}`);
+    const result = validateResumeProfile({ primarySkills: many, secondarySkills: many }, 'Test');
+    expect(result.primarySkills).toHaveLength(12);
+    expect(result.secondarySkills).toHaveLength(12);
+    expect(result.primarySkills[0]).toBe('skill-0');
+  });
+
+  it('caps projects at 6, and each project\'s technologies at 10', () => {
+    const manyProjects = Array.from({ length: 10 }, (_, i) => ({
+      summary: `Project ${i}`,
+      technologies: Array.from({ length: 15 }, (_, j) => `tech-${j}`),
+    }));
+    const result = validateResumeProfile({ projects: manyProjects }, 'Test');
+    expect(result.projects).toHaveLength(6);
+    expect(result.projects[0].technologies).toHaveLength(10);
+  });
+
+  it('drops a project with no usable summary rather than keeping an empty one', () => {
+    const result = validateResumeProfile(
+      { projects: [{ summary: '', technologies: ['Go'] }, { summary: 'Real project', technologies: [] }] },
+      'Test'
+    );
+    expect(result.projects).toHaveLength(1);
+    expect(result.projects[0].summary).toBe('Real project');
+  });
+
+  it('caps domains at 5 and notableClaims at 8', () => {
+    const result = validateResumeProfile(
+      {
+        domains: Array.from({ length: 9 }, (_, i) => `domain-${i}`),
+        notableClaims: Array.from({ length: 12 }, (_, i) => `claim-${i}`),
+      },
+      'Test'
+    );
+    expect(result.domains).toHaveLength(5);
+    expect(result.notableClaims).toHaveLength(8);
+  });
+
+  it('truncates an over-long string to the 60-char skill / 300-char claim caps', () => {
+    const longSkill = 'x'.repeat(200);
+    const longClaim = 'y'.repeat(500);
+    const result = validateResumeProfile({ primarySkills: [longSkill], notableClaims: [longClaim] }, 'Test');
+    expect(result.primarySkills[0]).toHaveLength(60);
+    expect(result.notableClaims[0]).toHaveLength(300);
+  });
+
+  it('scrubs an email address and a phone number out of any string field', () => {
+    const result = validateResumeProfile(
+      { notableClaims: ['reachable at jane.doe@example.com or +1 415 555 0199 for references'] },
+      'Test'
+    );
+    expect(result.notableClaims[0]).not.toMatch(/jane\.doe@example\.com/);
+    expect(result.notableClaims[0]).not.toMatch(/415.?555.?0199/);
+    expect(result.notableClaims[0]).toContain('[redacted]');
+  });
+
+  it('accepts a valid inferredLevel id and rejects an unrecognized one', () => {
+    expect(validateResumeProfile({ inferredLevel: 'senior_engineer' }, 'Test').inferredLevel).toBe('senior_engineer');
+    expect(validateResumeProfile({ inferredLevel: 'expert-wizard' }, 'Test').inferredLevel).toBeNull();
+  });
+
+  it('rounds a valid yearsOfExperience and nulls out an out-of-range or non-numeric value', () => {
+    expect(validateResumeProfile({ yearsOfExperience: 4.6 }, 'Test').yearsOfExperience).toBe(5);
+    expect(validateResumeProfile({ yearsOfExperience: -1 }, 'Test').yearsOfExperience).toBeNull();
+    expect(validateResumeProfile({ yearsOfExperience: 200 }, 'Test').yearsOfExperience).toBeNull();
+    expect(validateResumeProfile({ yearsOfExperience: 'five' }, 'Test').yearsOfExperience).toBeNull();
+  });
+
+  it('uses statusCode 502 by default (AI extraction failure) and honors an explicit statusCode (client-submitted failure)', () => {
+    let aiError: AppError | undefined;
+    try {
+      validateResumeProfile(null, 'AI');
+    } catch (e) {
+      aiError = e as AppError;
+    }
+    expect(aiError).toBeInstanceOf(AppError);
+    expect(aiError?.statusCode).toBe(502);
+
+    let clientError: AppError | undefined;
+    try {
+      validateResumeProfile(null, 'client-submitted', 400);
+    } catch (e) {
+      clientError = e as AppError;
+    }
+    expect(clientError).toBeInstanceOf(AppError);
+    expect(clientError?.statusCode).toBe(400);
   });
 });

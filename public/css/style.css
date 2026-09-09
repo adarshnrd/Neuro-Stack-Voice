@@ -563,6 +563,44 @@ button:active { transform: scale(0.98); }
   font-style: italic;
 }
 
+/* ---- Transcript enhancement (server-side ASR improving the Web Speech
+   text before submit) — see
+   docs/project-improvement/VOICE_RECOGNITION_ACCURACY_PLAN.md and
+   app.js's _enhanceTranscriptWithAudio. ---- */
+.transcript-enhance-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--text-2);
+}
+
+.transcript-enhance-spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--cyan);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.transcript-enhance-status.is-done .transcript-enhance-spinner { display: none; }
+.transcript-enhance-status.is-done { color: var(--green); }
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--cyan);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link-btn:hover { color: var(--purple); }
+
 /* ---- Waveform Animation ---- */
 .waveform-bars {
   display: flex;
@@ -906,6 +944,176 @@ button:active { transform: scale(0.98); }
 .q-feedback-text { color: var(--text-2); }
 .q-better-answer { color: var(--cyan); background: rgba(6, 182, 212, 0.05); padding: 8px 12px; border-radius: var(--radius-sm); border-left: 2px solid var(--cyan); }
 
+/* Structured per-question evaluation fields (summary/strengths/gaps/
+   improvementAreas/studyPoints) — see
+   docs/project-improvement/RICH_EVALUATION_SCALE_PLAN.md §3. Strengths/
+   gaps/improvementAreas reuse .q-feedback-text (and its markdown rules
+   below) since they're still markdown-rendered free text, just under
+   more specific labels than the old single blended block. */
+.q-study-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.q-study-point-chip {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  background: var(--bg-3, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+/* Shown above the final/overall feedback text when the score has
+   auto-refreshed from a late-arriving evaluation but the narrative write-up
+   hasn't been regenerated to match — see RICH_EVALUATION_SCALE_PLAN.md §6. */
+.feedback-status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--text-3);
+  background: rgba(234, 179, 8, 0.08);
+  border: 1px solid rgba(234, 179, 8, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.feedback-status-banner .btn-link {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ---- Markdown-rendered AI content ----
+   Applies to every place an AI-generated response is rendered via
+   markdown.js: per-question feedback/model-answer, and the overall
+   summary feedback (both the just-finished completion panel and the
+   history detail panel). Content is nested HTML (headings/lists/code/
+   tables), not a single text run, so these target the descendant tags
+   markdown.js can emit rather than the container itself. */
+.q-feedback-text, .q-better-answer, #final-feedback, #detail-feedback {
+  font-size: 0.86rem;
+  line-height: 1.65;
+}
+
+.q-feedback-text > *:first-child, .q-better-answer > *:first-child,
+#final-feedback > *:first-child, #detail-feedback > *:first-child { margin-top: 0; }
+.q-feedback-text > *:last-child, .q-better-answer > *:last-child,
+#final-feedback > *:last-child, #detail-feedback > *:last-child { margin-bottom: 0; }
+
+.q-feedback-text p, .q-better-answer p, #final-feedback p, #detail-feedback p {
+  margin: 0 0 10px;
+}
+
+.q-feedback-text h3, .q-feedback-text h4, .q-feedback-text h5, .q-feedback-text h6,
+.q-better-answer h3, .q-better-answer h4, .q-better-answer h5, .q-better-answer h6,
+#final-feedback h3, #final-feedback h4, #final-feedback h5, #final-feedback h6,
+#detail-feedback h3, #detail-feedback h4, #detail-feedback h5, #detail-feedback h6 {
+  color: var(--text-1);
+  font-weight: 700;
+  margin: 16px 0 8px;
+  line-height: 1.35;
+}
+.q-feedback-text h3, .q-better-answer h3, #final-feedback h3, #detail-feedback h3 { font-size: 1rem; }
+.q-feedback-text h4, .q-better-answer h4, #final-feedback h4, #detail-feedback h4 { font-size: 0.94rem; }
+.q-feedback-text h5, .q-better-answer h5, #final-feedback h5, #detail-feedback h5,
+.q-feedback-text h6, .q-better-answer h6, #final-feedback h6, #detail-feedback h6 { font-size: 0.88rem; }
+
+.q-feedback-text strong, .q-better-answer strong, #final-feedback strong, #detail-feedback strong {
+  color: var(--text-1);
+  font-weight: 700;
+}
+
+.q-feedback-text em, .q-better-answer em, #final-feedback em, #detail-feedback em {
+  font-style: italic;
+}
+
+.q-feedback-text ul, .q-feedback-text ol,
+.q-better-answer ul, .q-better-answer ol,
+#final-feedback ul, #final-feedback ol,
+#detail-feedback ul, #detail-feedback ol {
+  margin: 0 0 10px;
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.q-feedback-text code, .q-better-answer code, #final-feedback code, #detail-feedback code {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--cyan);
+  word-break: break-word;
+}
+
+.q-feedback-text pre, .q-better-answer pre, #final-feedback pre, #detail-feedback pre {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 0 0 10px;
+  overflow-x: auto;
+}
+
+.q-feedback-text pre code, .q-better-answer pre code,
+#final-feedback pre code, #detail-feedback pre code {
+  background: none;
+  padding: 0;
+  color: var(--text-1);
+  font-size: 0.8em;
+  white-space: pre;
+}
+
+.q-feedback-text blockquote, .q-better-answer blockquote,
+#final-feedback blockquote, #detail-feedback blockquote {
+  margin: 0 0 10px;
+  padding: 4px 12px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--text-2);
+}
+
+.q-feedback-text hr, .q-better-answer hr, #final-feedback hr, #detail-feedback hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.q-feedback-text a, .q-better-answer a, #final-feedback a, #detail-feedback a {
+  color: var(--cyan);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.md-table-wrap { overflow-x: auto; margin: 0 0 10px; }
+
+.q-feedback-text table, .q-better-answer table, #final-feedback table, #detail-feedback table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.84em;
+}
+
+.q-feedback-text th, .q-feedback-text td,
+.q-better-answer th, .q-better-answer td,
+#final-feedback th, #final-feedback td,
+#detail-feedback th, #detail-feedback td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.q-feedback-text th, .q-better-answer th, #final-feedback th, #detail-feedback th {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-1);
+  font-weight: 700;
+}
+
 /* ============================================================
    SCROLLBAR
    ============================================================ */
@@ -946,6 +1154,95 @@ button:active { transform: scale(0.98); }
   color: var(--purple);
   font-weight: 500;
   font-size: 0.72rem;
+}
+
+/* ============================================================
+   RETURNING VISITOR (optional email history lookup — see
+   docs/OPTIONAL_HISTORY_LOOKUP_PLAN.md)
+   ============================================================ */
+.returning-visitor-box {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.returning-visitor-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.returning-visitor-label svg {
+  color: var(--cyan);
+  flex-shrink: 0;
+}
+
+.returning-visitor-box .field-hint {
+  margin-top: 4px;
+  margin-bottom: 10px;
+}
+
+.returning-visitor-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.returning-visitor-row input {
+  flex: 1;
+  min-width: 180px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  outline: none;
+  transition: var(--transition);
+}
+
+.returning-visitor-row input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.12);
+}
+
+.returning-visitor-row input::placeholder {
+  color: var(--text-3);
+}
+
+.returning-visitor-history-link {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 0;
+  font-size: 0.8rem;
+}
+
+/* ---- History-panel email lookup (mirrors .returning-visitor-box) ---- */
+.history-email-lookup {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.history-email-lookup .field-hint {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.history-email-lookup .btn-link {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 0;
+  font-size: 0.78rem;
 }
 
 /* ============================================================
@@ -1350,6 +1647,46 @@ select optgroup option {
 }
 
 /* ============================================================
+   USER'S OWN ANSWER (shown alongside AI feedback — see
+   uiManager.js's _renderQuestionItems)
+   ============================================================ */
+.q-user-answer {
+  color: var(--text-1);
+  background: rgba(148, 163, 184, 0.06);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border-left: 2px solid var(--border-strong);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ============================================================
+   ANSWERED-BUT-NOT-SCORED STATE (AI scoring failed or didn't
+   finish before the interview ended — see the `unavailable` flag
+   on EvaluationData in interview.service.ts's decoupled
+   evaluation design). Distinct from "skipped" — the user DID
+   answer, it just isn't scored.
+   ============================================================ */
+.q-score-badge.unavailable {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+/* Background evaluation still in flight (status: 'processing' — see
+   RICH_EVALUATION_SCALE_PLAN.md §4). Distinct from "unavailable": this
+   isn't a failure, it just hasn't finished yet. */
+.q-score-badge.processing {
+  background: rgba(6, 182, 212, 0.12);
+  color: var(--cyan);
+  font-weight: 500;
+}
+
+.q-item.q-unavailable {
+  opacity: 0.85;
+}
+
+/* ============================================================
    HISTORY PANEL
    ============================================================ */
 .history-header {
@@ -1638,4 +1975,346 @@ select optgroup option {
   .account-email {
     display: none;
   }
+}
+
+/* ============================================================
+   INTERVIEW LEVEL PICKER (see
+   docs/project-improvement/DIFFICULTY_LEVEL_PLAN.md) — a radio-group of
+   cards rendered by uiManager.js's populateLevelPicker from
+   GET /api/interviews/config's difficultyLevels list. Uses the purple
+   accent (rather than cyan, already spoken for by the tech-stack picker)
+   so the level badges reusing this same color read as a distinct signal
+   wherever they show up later (interview header, completion score,
+   history rows).
+   ============================================================ */
+.level-picker-group {
+  margin-bottom: 20px;
+}
+
+.level-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.level-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--text-1);
+  font-family: var(--font);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.level-card:hover {
+  border-color: rgba(139, 92, 246, 0.4);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.level-card:focus-visible {
+  outline: none;
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.18);
+}
+
+.level-card.selected {
+  border-color: var(--purple);
+  background: rgba(139, 92, 246, 0.08);
+  box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.25), inset 0 0 24px rgba(139, 92, 246, 0.05);
+}
+
+.level-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.level-card-label {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-1);
+}
+
+.level-card.selected .level-card-label {
+  color: var(--purple);
+}
+
+.level-card-badge {
+  margin-left: auto;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--purple);
+  background: rgba(139, 92, 246, 0.14);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 100px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.level-card-experience {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+.level-card-blurb {
+  font-size: 0.78rem;
+  color: var(--text-2);
+  line-height: 1.45;
+}
+
+/* ============================================================
+   LEVEL BADGES — the same "which level was this?" pill shown wherever a
+   score can be seen, so a score is never read without its level attached:
+   the interview header (next to the tech-stack badge), the completion
+   panel and history-detail panel (next to the grade), reusing one class
+   in every spot. Empty (before JS sets it, or if the level is unknown)
+   collapses to nothing rather than showing a blank pill.
+   ============================================================ */
+.badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.level-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--purple);
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  padding: 4px 10px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.level-badge:empty {
+  display: none;
+}
+
+.score-grade-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.score-grade-row .score-grade {
+  margin-bottom: 0;
+}
+
+/* ---- History card: level shown alongside the tech stack ---- */
+.history-card-level {
+  color: var(--purple);
+}
+
+@media (max-width: 600px) {
+  .level-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .score-grade-row {
+    justify-content: center;
+  }
+
+  .badge-row {
+    justify-content: center;
+  }
+
+  .count-options {
+    justify-content: flex-start;
+  }
+}
+
+/* ============================================================
+   NUMBER OF QUESTIONS control (see
+   docs/project-improvement/RESUME_MODE_PLAN.md §7.2) — a segmented
+   button group mirroring .level-card's selected/hover treatment, plus a
+   plain number input for a custom value. Untouched = server default (see
+   app.js's questionCountExplicit flag); no option is pre-selected so the
+   control never implies a choice the user didn't make.
+   ============================================================ */
+.question-count-group {
+  margin-bottom: 20px;
+}
+
+.count-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.count-option {
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.count-option:hover {
+  border-color: rgba(6, 182, 212, 0.4);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.count-option.selected {
+  border-color: var(--cyan);
+  background: rgba(6, 182, 212, 0.1);
+  color: var(--cyan);
+}
+
+.count-custom-input {
+  display: block;
+  margin-top: 10px;
+  width: 140px;
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font-family: var(--font);
+  font-size: 0.85rem;
+  outline: none;
+  transition: var(--transition);
+}
+
+.count-custom-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.12);
+}
+
+.question-count-group .field-hint {
+  margin-top: 8px;
+}
+
+/* ============================================================
+   RESUME MODE (see docs/project-improvement/RESUME_MODE_PLAN.md) — the
+   paste textarea itself reuses .jd-group (see index.html); this block is
+   just the "Analyze Resume" button and the read-only extraction summary
+   that appears once POST /resume/analyze returns.
+   ============================================================ */
+.resume-group #btn-analyze-resume {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resume-analysis-summary {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(6, 182, 212, 0.04);
+  animation: slide-up 0.3s ease;
+}
+
+.resume-analysis-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 10px;
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+
+.resume-analysis-row:last-child {
+  margin-bottom: 0;
+}
+
+.resume-analysis-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-3);
+}
+
+.resume-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.resume-tag {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--cyan);
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.25);
+  padding: 3px 10px;
+  border-radius: 100px;
+}
+
+.resume-tag.secondary {
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-strong);
+}
+
+.resume-project-item {
+  font-size: 0.82rem;
+  color: var(--text-2);
+  line-height: 1.5;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.resume-project-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.resume-project-item .resume-project-tech {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--text-3);
+}
+
+.resume-level-nudge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(139, 92, 246, 0.06);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+.resume-level-nudge p {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-2);
+}
+
+.resume-level-nudge button {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  font-size: 0.76rem;
 }

@@ -1,5 +1,23 @@
 
 services:
+  # Runs `prisma migrate deploy` ONCE, to completion, before `app` starts —
+  # see docs/audit/01-BACKLOG-P0-P3.md [P3-08] and the `migrate` build
+  # target in the Dockerfile for the full rationale. `app` below waits on
+  # this via `service_completed_successfully`, so even `docker compose up
+  # --scale app=N` only ever runs the migration once, never per replica.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://neurostack:${POSTGRES_PASSWORD}@db:5432/neurostack?schema=public
+      DIRECT_URL: postgresql://neurostack:${POSTGRES_PASSWORD}@db:5432/neurostack?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: 'no'
+
   app:
     build:
       context: .
@@ -10,8 +28,11 @@ services:
       NODE_ENV: production
       PORT: 3000
       TRUST_PROXY_HOPS: 0
-      DATABASE_URL: postgresql://neurostack:neurostack@db:5432/neurostack?schema=public
-      DIRECT_URL: postgresql://neurostack:neurostack@db:5432/neurostack?schema=public
+      # POSTGRES_PASSWORD is required below (no default) — interpolated
+      # here so the app's connection string always matches whatever the db
+      # service was actually started with, instead of a hardcoded literal.
+      DATABASE_URL: postgresql://neurostack:${POSTGRES_PASSWORD}@db:5432/neurostack?schema=public
+      DIRECT_URL: postgresql://neurostack:${POSTGRES_PASSWORD}@db:5432/neurostack?schema=public
       # Set real values via a .env file (docker compose --env-file) or your
       # orchestrator's secret store — do NOT bake real secrets into this
       # file. See .env.example for the full list.
@@ -24,16 +45,27 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: neurostack
-      POSTGRES_PASSWORD: neurostack
+      # See docs/audit/01-BACKLOG-P0-P3.md [P3-07]: this file declares
+      # NODE_ENV: production above but previously hardcoded the database
+      # password to the literal 'neurostack', inconsistent with every app
+      # secret above it (which all require a real value via ${VAR:?...}).
+      # No default — docker compose refuses to start without a real value.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your environment or a .env file — do not use a default in production}
       POSTGRES_DB: neurostack
     ports:
-      - '5432:5432'
+      # Bound to loopback only — the app reaches this over the compose
+      # network (db:5432), not the host. Previously an unqualified
+      # '5432:5432' published Postgres on every interface, so anyone who
+      # could reach the host's network could reach the database directly.
+      - '127.0.0.1:5432:5432'
     volumes:
       - nsv_postgres_data:/var/lib/postgresql/data
     healthcheck:

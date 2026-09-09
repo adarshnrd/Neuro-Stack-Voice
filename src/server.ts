@@ -6,6 +6,7 @@ import { disconnectDatabase } from './config/database';
 import { createApp } from './app';
 import socketHandler from './sockets/interview.socket';
 import socketAuthMiddleware from './sockets/auth';
+import interviewEvents from './services/interviewEvents';
 import logger from './utils/logger';
 
 // ─── Startup config validation ──────────────────────────────────────────────
@@ -38,6 +39,29 @@ io.on('connection', (socket: Socket) => {
   socket.on('disconnect', () => {
     logger.info('Socket disconnected', { socketId: socket.id });
   });
+});
+
+// ─── Background evaluation event forwarding ────────────────────────────────
+// Registered ONCE here (not per-connection inside io.on('connection', ...))
+// because interviewEvents is a single process-wide EventEmitter shared by
+// every session, not something scoped to one socket. Per-question AI
+// evaluation now runs in the background after the answer itself is already
+// persisted (see interview.service.ts's submitAnswer/_evaluateAndPersist),
+// so by the time an evaluation finishes there's no request-scoped `socket`
+// left to emit on — interviewEvents is how interviewService reaches back
+// into the transport layer. Forwarding to `io.to(sessionId)` (the room every
+// client joins via 'interview:join') reaches whichever socket(s) are
+// actually watching that session, without interviewService needing to know
+// anything about Socket.IO. Registering this handler once per connection
+// instead would mean N duplicate emits after N connections have ever been
+// made — a slow leak that's easy to miss in testing but very visible in
+// production.
+interviewEvents.onAnswerEvaluated(({ sessionId, questionId, evaluation }) => {
+  io.to(sessionId).emit('answer:evaluated', { questionId, evaluation });
+});
+
+interviewEvents.onProviderSwitch(({ sessionId, ...providerSwitch }) => {
+  io.to(sessionId).emit('provider:switch', providerSwitch);
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────

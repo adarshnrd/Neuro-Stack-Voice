@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import config from './config';
+import logger from '../utils/logger';
 
 /**
  * Shared PrismaClient singleton.
@@ -34,7 +35,7 @@ export async function pingDatabase(): Promise<boolean> {
     await prisma.$queryRaw`SELECT 1`;
     return true;
   } catch (err) {
-    console.error('[Database] Health ping failed:', err);
+    logger.error('Database health ping failed', { error: err instanceof Error ? err.message : String(err) });
     return false;
   }
 }
@@ -46,8 +47,8 @@ export async function pingDatabase(): Promise<boolean> {
 export async function disconnectDatabase(): Promise<void> {
   try {
     await prisma.$disconnect();
-    console.log('[Database] Connection closed');
+    logger.info('Database connection closed');
   } catch (err) {
-    console.error('[Database] Error disconnecting:', err);
+    logger.error('Database disconnect error', { error: err instanceof Error ? err.message : String(err) });
   }
 }

@@ -3,7 +3,7 @@ import { createMockPrisma } from '../helpers/mockPrisma';
 const mock = createMockPrisma();
 
 // Must precede the `import { createApp }` below — see tests/helpers/mockPrisma.ts
-// doc comment for why only `user` (and $queryRaw) are implemented.
+// doc comment for what's implemented (`user`, `session`, `$queryRaw`) and why.
 jest.mock('../../src/config/database', () => ({
   prisma: mock.prisma,
   pingDatabase: jest.fn(async () => true),

@@ -10,11 +10,20 @@
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly isOperational: boolean;
+  /**
+   * Milliseconds the caller was told to wait before retrying, parsed from
+   * an upstream `Retry-After` header (429 responses only — see
+   * src/services/ai/baseService.ts's handleProviderErrorResponse and
+   * docs/audit/02-BACKLOG-P4-P10.md [P5-04]). Undefined for every other
+   * error, and for a 429 with no Retry-After header at all.
+   */
+  public readonly retryAfterMs?: number;
 
-  constructor(message: string, statusCode: number, isOperational = true) {
+  constructor(message: string, statusCode: number, isOperational = true, retryAfterMs?: number) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = isOperational;
+    this.retryAfterMs = retryAfterMs;
 
     // Maintain proper prototype chain for instanceof checks
     Object.setPrototypeOf(this, new.target.prototype);

@@ -5,17 +5,39 @@ import {
   validateQuestions,
   validateEvaluation,
   validateFinalEvaluation,
+  validateAnswerGuidance,
+  validateResumeProfile,
+  handleProviderErrorResponse,
 } from './baseService';
-import { Question, EvaluationResult, FinalEvaluation, GenerationOptions } from '../../types';
+import {
+  Question,
+  EvaluationResult,
+  FinalEvaluation,
+  GenerationOptions,
+  EvaluationDigestItem,
+  AnswerGuidanceResult,
+  DifficultyLevel,
+  QuestionKind,
+  ResumeProfile,
+} from '../../types';
 import config from '../../config/config';
-import { getQuestionsPrompt, getEvaluationPrompt, getFinalEvaluationPrompt } from '../../utils/promptBuilder';
+import {
+  getQuestionsPrompt,
+  getEvaluationPrompt,
+  getFinalEvaluationPrompt,
+  getAnswerGuidancePrompt,
+  getResumeExtractionPrompt,
+} from '../../utils/promptBuilder';
 import { AppError } from '../../utils/appError';
+import logger from '../../utils/logger';
 
 export class NvidiaService extends BaseAIService {
   private readonly apiUrl = 'https://integrate.api.nvidia.com/v1/chat/completions';
 
   getDefaultModel(): string {
-    return 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning';
+    // Configurable via NVIDIA_MODEL — see groqService.ts for why this is a
+    // config lookup rather than a hardcoded string.
+    return config.ai.nvidiaModel;
   }
 
   private async makeRequest(content: string): Promise<string> {
@@ -43,14 +65,12 @@ export class NvidiaService extends BaseAIService {
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      if (response.status === 429) {
-        throw new AppError(`NVIDIA API rate limit exceeded. Please try again later.`, 429);
-      }
-      if (response.status === 401 || response.status === 403) {
-        throw new AppError(`NVIDIA API authentication failed (${response.status}). Check NVIDIA_API_KEY.`, 503);
-      }
-      throw new AppError(`NVIDIA API error (${response.status}): ${errText}`, 502);
+      // Logs the full upstream body and throws a stable, generic message —
+      // see docs/audit/01-BACKLOG-P0-P3.md [P2-04]. Also honors a 429's
+      // Retry-After header — see [P5-04]. Status code (e.g. the 503
+      // "resource exhausted" / worker-limit-reached responses NVIDIA sends
+      // under load) is still preserved.
+      await handleProviderErrorResponse(response, 'NVIDIA', this.getActiveModel());
     }
 
     const data: unknown = await response.json();
@@ -58,7 +78,7 @@ export class NvidiaService extends BaseAIService {
     const text = (data as { choices?: Array<{ message?: { content?: string } }> })?.choices?.[0]?.message
       ?.content;
     if (typeof text !== 'string') {
-      console.error('[NVIDIA] Unexpected response shape:', JSON.stringify(data).substring(0, 500));
+      logger.error('NVIDIA: unexpected response shape', { provider: 'nvidia', model: this.getActiveModel() });
       throw new AppError('NVIDIA returned an unexpected response format', 502);
     }
 
@@ -70,12 +90,12 @@ export class NvidiaService extends BaseAIService {
     return withRetry(async () => {
       const content = await this.makeRequest(prompt);
       const parsed = this.extractJson(content, 'NVIDIA');
-      return validateQuestions(parsed, 'NVIDIA');
+      return validateQuestions(parsed, 'NVIDIA', count);
     }, 'NVIDIA');
   }
 
-  async evaluateAnswer(question: string, answer: string): Promise<EvaluationResult> {
-    const prompt = getEvaluationPrompt(question, answer);
+  async evaluateAnswer(question: string, answer: string, level?: DifficultyLevel, kind?: QuestionKind): Promise<EvaluationResult> {
+    const prompt = getEvaluationPrompt(question, answer, level, kind);
     return withRetry(async () => {
       const content = await this.makeRequest(prompt);
       const parsed = this.extractJson(content, 'NVIDIA');
@@ -83,12 +103,36 @@ export class NvidiaService extends BaseAIService {
     }, 'NVIDIA');
   }
 
-  async evaluateInterview(qaPairs: { question: string; answer: string }[]): Promise<FinalEvaluation> {
-    const prompt = getFinalEvaluationPrompt(qaPairs);
+  async evaluateInterview(digest: EvaluationDigestItem[], level?: DifficultyLevel): Promise<FinalEvaluation> {
+    const prompt = getFinalEvaluationPrompt(digest, level);
     return withRetry(async () => {
       const content = await this.makeRequest(prompt);
       const parsed = this.extractJson(content, 'NVIDIA');
       return validateFinalEvaluation(parsed, 'NVIDIA');
+    }, 'NVIDIA');
+  }
+
+  async generateAnswerGuidance(
+    question: string,
+    topic?: string,
+    level?: DifficultyLevel,
+    kind?: QuestionKind
+  ): Promise<AnswerGuidanceResult> {
+    const prompt = getAnswerGuidancePrompt(question, topic, level, kind);
+    return withRetry(async () => {
+      const content = await this.makeRequest(prompt);
+      const parsed = this.extractJson(content, 'NVIDIA');
+      return validateAnswerGuidance(parsed, 'NVIDIA');
+    }, 'NVIDIA');
+  }
+
+  /** Resume-mode pass 1 — see RESUME_MODE_PLAN.md §4.1. */
+  async extractResumeProfile(resumeText: string): Promise<ResumeProfile> {
+    const prompt = getResumeExtractionPrompt(resumeText);
+    return withRetry(async () => {
+      const content = await this.makeRequest(prompt);
+      const parsed = this.extractJson(content, 'NVIDIA');
+      return validateResumeProfile(parsed, 'NVIDIA');
     }, 'NVIDIA');
   }
 }

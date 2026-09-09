@@ -168,7 +168,7 @@ npm run build
 npm start
 ```
 
-Or via Docker:
+Or via Docker (also requires `POSTGRES_PASSWORD` — see `.env.example`; `docker compose up` runs database migrations automatically, in a one-shot `migrate` service, before starting the app — see `docker-compose.yml`):
 
 ```bash
 docker compose up --build
@@ -183,6 +183,31 @@ npm run verify   # lint + typecheck + test + build
 ```
 
 See `docs/project-improvement/phase-07-deployment-readiness.md` for the full production checklist.
+
+### 7. Deployment constraints
+
+**This service must currently run as a single instance — do not run more
+than one replica.** Three pieces of runtime state live in process memory,
+not in the database, and are not shared across instances:
+
+- `pendingEvaluations` (`src/services/interview.service.ts`) — the map
+  `endSession`'s bounded wait uses to find an in-flight background
+  evaluation for this session.
+- `memoryStore` and `dbUnavailableUntil` (`src/repositories/interview.repository.ts`)
+  — the bounded in-memory fallback store and circuit-breaker state used
+  when the database is briefly unreachable.
+
+Behind two or more replicas, an answer submitted via one instance and an
+interview ended via another means the second instance can't see the first
+one's in-flight evaluation — it stops waiting and writes a "not scored in
+time" placeholder for an answer that's actually being scored correctly
+elsewhere. This is latent, not currently live: at one instance everything
+works, and it costs nothing until a second replica exists. See
+`docs/audit/06-DEFERRED-DECISIONS.md` §4 for the options for lifting this
+constraint (deriving in-flight state from the already-persisted
+`status: 'processing'` marker instead of an in-process Map is the
+recommended path when horizontal scaling is actually needed) — do not add
+a second replica without addressing this first.
 
 ---
 
@@ -216,3 +241,5 @@ GitHub Actions (`.github/workflows/ci.yml`) runs all of the above against a thro
 ## Documentation
 
 The full audit, restructuring rationale, bug-fix log, security write-up, testing report, and deployment guide live in [`docs/project-improvement/`](./docs/project-improvement/).
+
+node scripts/test-provider-keys.mjs

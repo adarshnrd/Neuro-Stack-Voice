@@ -2,6 +2,7 @@ import { encrypt, decrypt } from '../utils/encryption';
 import { GeminiService } from './ai/geminiService';
 import { prisma } from '../config/database';
 import { AppError } from '../utils/appError';
+import logger from '../utils/logger';
 
 /** Maximum allowed length for an API key string. */
 export const MAX_API_KEY_LENGTH = 256;
@@ -78,7 +79,11 @@ class ApiKeyService {
     try {
       return decrypt(stored.encryptedKey);
     } catch (error) {
-      console.error(`[APIKey] Failed to decrypt key for user ${userId}/${provider}:`, error);
+      logger.error('Failed to decrypt stored API key', {
+        userId,
+        provider,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }

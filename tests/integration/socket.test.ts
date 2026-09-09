@@ -16,6 +16,8 @@ import request from 'supertest';
 import { createApp } from '../../src/app';
 import socketHandler from '../../src/sockets/interview.socket';
 import socketAuthMiddleware from '../../src/sockets/auth';
+import interviewEvents from '../../src/services/interviewEvents';
+import { AUTH_COOKIE_NAME } from '../../src/http/middleware/auth';
 
 const GROQ_QUESTIONS_RESPONSE = {
   choices: [
@@ -30,8 +32,25 @@ const GROQ_QUESTIONS_RESPONSE = {
   ],
 };
 
+// Structured per-question shape (see promptBuilder.ts's getEvaluationPrompt
+// and RICH_EVALUATION_SCALE_PLAN.md §3) — fully separate fields, not a
+// single blended `feedback` blob.
 const GROQ_EVAL_RESPONSE = {
-  choices: [{ message: { content: JSON.stringify({ score: 7, feedback: 'Solid.', betterAnswer: 'Even better.' }) } }],
+  choices: [
+    {
+      message: {
+        content: JSON.stringify({
+          score: 7,
+          summary: 'Solid answer overall.',
+          strengths: 'Clear grasp of the core mechanism.',
+          gaps: 'Missed one edge case.',
+          improvementAreas: 'Mention the edge case explicitly next time.',
+          betterAnswer: 'Even better.',
+          studyPoints: ['Edge case handling'],
+        }),
+      },
+    },
+  ],
 };
 
 const GROQ_FINAL_RESPONSE = {
@@ -50,6 +69,25 @@ describe('Socket.IO interview flow', () => {
     io = new SocketIOServer(httpServer, { cors: { origin: '*' } });
     io.use(socketAuthMiddleware);
     io.on('connection', (socket) => socketHandler(io, socket));
+
+    // Per-question evaluation now runs in the background and is delivered
+    // to clients via the shared `interviewEvents` emitter, forwarded to
+    // the right Socket.IO room — see src/server.ts's own (near-identical)
+    // registration and its comment explaining why this must be done once
+    // here, not inside io.on('connection', ...). This test harness builds
+    // its own `io` instance directly (it never imports/runs server.ts), so
+    // without this the background 'answer:evaluated'/'provider:switch'
+    // events interviewService emits would have no listener to forward them
+    // to this test's io — the client would join the session's room but
+    // nothing would ever be broadcast to it, and any test awaiting
+    // 'answer:evaluated' would hang until the Jest timeout.
+    interviewEvents.onAnswerEvaluated(({ sessionId, questionId, evaluation }) => {
+      io.to(sessionId).emit('answer:evaluated', { questionId, evaluation });
+    });
+    interviewEvents.onProviderSwitch(({ sessionId, ...providerSwitch }) => {
+      io.to(sessionId).emit('provider:switch', providerSwitch);
+    });
+
     httpServer.listen(0, () => {
       port = (httpServer.address() as AddressInfo).port;
       done();
@@ -109,10 +147,32 @@ describe('Socket.IO interview flow', () => {
     });
   }
 
-  it('rejects a handshake with no auth cookie', async () => {
+  // The app supports anonymous interviews end-to-end (see src/sockets/auth.ts's
+  // own doc comment): a missing cookie is a legitimate anonymous visitor, not
+  // an error, so the handshake must succeed rather than being rejected. This
+  // test used to assert the opposite — written before the anonymous-access
+  // redesign and never updated — which made it fail as soon as it could
+  // actually run against the real auth middleware (previously masked by an
+  // unrelated compile error). The behaviour actually worth guarding here is
+  // that a cookie which IS present but doesn't verify (tampered/expired) is
+  // still rejected, so a logged-in user's broken session surfaces as an
+  // error instead of silently downgrading to anonymous.
+  it('allows an anonymous handshake with no auth cookie (anonymous interviews are supported)', async () => {
+    const client = await new Promise<ClientSocket>((resolve, reject) => {
+      const c = ioClient(`http://localhost:${port}`);
+      c.on('connect', () => resolve(c));
+      c.on('connect_error', (err) => reject(err));
+    });
+    expect(client.connected).toBe(true);
+    client.close();
+  });
+
+  it('rejects a handshake with an invalid/tampered auth cookie', async () => {
     await expect(
       new Promise((resolve, reject) => {
-        const client = ioClient(`http://localhost:${port}`);
+        const client = ioClient(`http://localhost:${port}`, {
+          extraHeaders: { Cookie: `${AUTH_COOKIE_NAME}=not-a-real-jwt` },
+        });
         client.on('connect', () => reject(new Error('should not have connected')));
         client.on('connect_error', (err) => resolve(err));
       })

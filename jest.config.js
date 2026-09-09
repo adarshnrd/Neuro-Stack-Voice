@@ -21,4 +21,26 @@ module.exports = {
   ],
   coverageDirectory: '<rootDir>/coverage',
   testTimeout: 15000,
+  // [P6-03] docs/audit/02-BACKLOG-P4-P10.md: coverage is collected above but
+  // was never enforced, so it could silently fall to zero on a new file with
+  // no signal. The audit's own fix says to set the threshold "at whatever
+  // the recorded baseline actually is — a ratchet, not an aspiration," which
+  // requires an actual `npm test -- --coverage` run to read real numbers
+  // from; that could not be done from this sandbox (npm registry access is
+  // blocked here — see docs/audit/06-DEFERRED-DECISIONS.md / R-00). Guessing
+  // a number here would risk the opposite of the intent: too high and it
+  // breaks CI immediately on the current, unmeasured baseline; too low and
+  // it's a no-op that looks like a real gate. Uncomment and fill in with the
+  // real percentages once you've run the command below locally:
+  //
+  //   npm test -- --coverage
+  //
+  // coverageThreshold: {
+  //   global: {
+  //     branches: <observed>,
+  //     functions: <observed>,
+  //     lines: <observed>,
+  //     statements: <observed>,
+  //   },
+  // },
 };

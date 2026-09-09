@@ -25,6 +25,14 @@ model Session {
   techStack        String
   provider         String   @default("groq")
   model            String
+  // Interview difficulty level — see
+  // docs/project-improvement/DIFFICULTY_LEVEL_PLAN.md and
+  // src/config/difficultyLevels.ts (single source of truth for the four
+  // allowed values). Additive, defaulted column: every session created
+  // before this migration reads back as "software_engineer", which is
+  // deliberately the SAME rubric this app already scored with, so nothing
+  // about an existing row's meaning changes.
+  difficultyLevel  String   @default("software_engineer")
   questions        Json
   answers          Json
   evaluations      Json
@@ -37,14 +45,36 @@ model Session {
   answeredCount    Int      @default(0)
   interviewContext Json?
   userApiKeyUsed   Boolean  @default(false)
+  // Optional, unverified self-reported email a visitor can attach to a
+  // session with no login (see docs/OPTIONAL_HISTORY_LOOKUP_PLAN.md,
+  // Option B — explicitly chosen without PIN/verification). Always stored
+  // normalized (trimmed + lowercased) so lookups are a plain equality
+  // match. Deliberately independent of `userId`/`User` — this is NOT an
+  // account, just a label sessions can be found by later.
+  historyEmail     String?
+  // PII-stripped structured profile extracted from a candidate's resume —
+  // see docs/project-improvement/RESUME_MODE_PLAN.md §5/§6. Only set for
+  // techStack === 'Resume' sessions; null for every other mode. The RAW
+  // resume text is deliberately never stored anywhere — this profile is
+  // the only trace of it that ever reaches the database. Additive,
+  // nullable column: every existing row reads back as null, unaffected.
+  resumeProfile    Json?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt @default(now())
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Cascade, not SetNull — see docs/audit/01-BACKLOG-P0-P3.md [P3-06].
+  // A null-owner session is, by this app's deliberate anonymous-session
+  // design, readable by anyone holding its UUID (see getOwnedSession).
+  // SetNull therefore turned account deletion into the opposite of what a
+  // user asks for it to do: every one of their sessions went from private
+  // to link-public instead of being removed. Matches the pattern
+  // UserApiKey already uses below.
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([createdAt])
   @@index([userId])
+  @@index([historyEmail])
 }
 
 model UserApiKey {

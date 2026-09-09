@@ -7,6 +7,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "predev": "npx prisma generate",
     "dev": "nodemon --exec ts-node --transpile-only src/server.ts --ext ts",
     "dev:prisma": "npx prisma generate && nodemon --exec ts-node --transpile-only src/server.ts --ext ts",
     "build": "npx prisma generate && tsc",
