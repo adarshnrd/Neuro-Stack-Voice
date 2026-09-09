@@ -168,3 +168,5 @@ for (const p of providers) {
 console.log('');
 console.log(anyFail ? 'One or more providers failed — see FAIL lines above.' : 'All providers responded successfully.');
 process.exit(anyFail ? 1 : 0);
+
+
